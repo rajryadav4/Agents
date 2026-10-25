@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WARDEN — Agent Control Plane</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234f46e5' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--accent)" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path fill="#fff" opacity=".9" d="m10.6 14.2-2-2-1.3 1.3 3.3 3.3 6-6-1.3-1.3z"/></svg>
+      <div><b>WARDEN</b><div class="tag">Agent Control Plane</div></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot">
+      <div class="live"><span class="dot" id="livedot"></span> <span id="livetext">connecting…</span></div>
+      <div style="margin-top:8px"><a href="/docs" target="_blank">API docs ↗</a></div>
+      <div style="margin-top:4px" class="dim">v1.0 · <a href="#" id="themebtn">toggle theme</a></div>
+    </div>
+  </aside>
+  <main class="main" id="view"></main>
+</div>
+<div id="toasts"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

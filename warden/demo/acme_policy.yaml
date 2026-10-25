@@ -1,0 +1,82 @@
+# Acme Corp — agent constitution
+# Every tool call made by any Acme agent is checked against these rules.
+# action: deny | require_approval | quarantine | warn
+# mode:   enforce | warn | observe   (progressive roll-out)
+name: acme-constitution
+version: 3
+settings:
+  org_domain: acme.com
+defaults:
+  mode: enforce
+rules:
+  - id: external-email-needs-approval
+    description: Email to anyone outside acme.com (other than a customer we are serving) needs a human.
+    when:
+      tool: send_email
+      all:
+        - args: { to: { not_glob: "*@acme.com" } }
+        - args: { to: { not_glob: "⟦pii:email:*" } }
+    action: require_approval
+    severity: medium
+    suggestion: Use the customer's handle from the CRM, or ask a teammate to approve.
+
+  - id: refunds-over-500-two-person
+    description: Refunds above $500 need two different humans to approve (two-person rule).
+    when: { tool: issue_refund, args: { amount: { gt: 500 } } }
+    action: require_approval
+    approvals: 2
+    severity: high
+
+  - id: refunds-hard-cap
+    description: No agent may ever issue a refund above $5,000.
+    when: { tool: issue_refund, args: { amount: { gt: 5000 } } }
+    action: deny
+    severity: critical
+    suggestion: Escalate to the finance team; agents cannot issue refunds this large.
+
+  - id: no-destructive-shell
+    description: Destructive or remote-code shell commands are never allowed.
+    when:
+      tool: shell_exec
+      args: { cmd: { regex: "rm\\s+-rf|mkfs|dd\\s+if=|:\\(\\)\\s*\\{|shutdown|reboot|curl[^|]*\\|\\s*(ba|z)?sh|wget[^|]*\\|\\s*(ba|z)?sh|chmod\\s+777" } }
+    action: deny
+    severity: critical
+
+  - id: no-paste-or-tunnel-sites
+    description: Uploading to paste bins, tunnels or request catchers is a classic exfiltration channel.
+    when:
+      tool: [http_post, web_fetch, send_email]
+      any:
+        - args: { url: { regex: "pastebin|paste\\.ee|ngrok|webhook\\.site|requestbin|transfer\\.sh|hastebin" } }
+        - args: { to: { regex: "pastebin|ngrok|webhook\\.site|requestbin" } }
+    action: quarantine
+    severity: critical
+
+  - id: secrets-are-ops-only
+    description: Only ops agents may read secrets.
+    when: { tool: read_secret, role: { not_glob: ops } }
+    action: deny
+    severity: high
+
+  - id: deletions-need-approval
+    description: Deleting files needs a human.
+    when: { tool: delete_file }
+    action: require_approval
+    severity: medium
+
+  - id: general-channel-warning
+    description: Posts to #general reach the whole company; flag them.
+    when: { tool: slack_post, args: { channel: { eq: "#general" } } }
+    action: warn
+    severity: low
+    mode: warn
+
+  - id: after-hours-deploys
+    description: Deploys outside business hours (being rolled out — observe only for now).
+    when:
+      tool: shell_exec
+      args: { cmd: { contains: deploy } }
+      time: { outside: "09:00-18:00" }
+    action: require_approval
+    severity: medium
+    mode: observe

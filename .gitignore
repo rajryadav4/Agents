@@ -1,0 +1,14 @@
+
+*.db
+*.db-journal
+*.egg-info/
+*.pyc
+.coverage
+.hypothesis/
+.pytest_cache/
+.venv/
+__pycache__/
+build/
+dist/
+node_modules/
+tests/screenshots/

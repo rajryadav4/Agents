@@ -43,7 +43,7 @@ Most teams' answer today is "a good system prompt and some regexes." In our benc
 
 Every tool call runs this gauntlet in **~0.1 ms**. Allowed calls execute (with their output labelled and PII vaulted); risky ones are held for human approval; malicious ones are blocked; a caught agent is quarantined and silently fed honeypot tools while you investigate.
 
-> 🎬 **[Watch the 74-second demo](docs/warden-demo.mp4)** — a screen-capture of the live dashboard running the full demo.
+> 🎬 **[Watch the narrated 2-minute demo](docs/warden-demo-narrated.mp4)** 🔊 — a screen-capture of the live dashboard with a voiceover explaining how it works. (A [silent 74-second cut](docs/warden-demo.mp4) is also included.)
 
 ![Overview dashboard](docs/img/overview.png)
 

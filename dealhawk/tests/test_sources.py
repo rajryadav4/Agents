@@ -132,3 +132,18 @@ def test_http_accepts_2xx():
 
 def test_presets_are_urls():
     assert all(u.startswith("https://") for u in PRESETS.values())
+
+
+def test_ssl_context_trusts_certifi():
+    import certifi
+    from dealhawk.sources.base import make_ssl_context
+    ctx = make_ssl_context()
+    assert ctx.verify_mode.name == "CERT_REQUIRED" and ctx.check_hostname    # still verifying, never disabled
+    assert ctx.cert_store_stats()["x509_ca"] >= 100                            # certifi's ~150 roots loaded
+    assert certifi.where()
+
+
+def test_cert_error_is_explained():
+    from dealhawk.tracking import explain
+    msg = explain(FetchError("https://x: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"))
+    assert "certifi" in msg and "Install Certificates" in msg

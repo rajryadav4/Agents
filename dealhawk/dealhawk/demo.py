@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 import time
 
-from .models import Deal, Offer, Score
+from .models import Deal, Offer
 from .scoring import score_offer
 from .store import Store
 
@@ -51,7 +51,6 @@ def seed(store: Store, order: tuple = (3, 2, 5, 8, 6, 1, 0)) -> None:
 
 def seed_tracked(store: Store) -> None:
     """Two sample tracked products (no real links) so the tracking panel can be previewed."""
-    from .models import slug
     now = time.time()
     for title, retailer, mode, target, prices in [
         ("Sample: 65\" OLED TV you're watching", "Best Buy", "target", 1299.0, [1799, 1799, 1699, 1799, 1499, 1599, 1449]),

@@ -5,7 +5,7 @@ from dealhawk.sources.harvest import harvest_products
 from dealhawk.sources.pagewatch import extract_product
 from dealhawk.sources.retail import RETAILERS, RetailSource
 
-from .conftest import FakeFetcher, fixture_text
+from .conftest import fixture_text
 
 
 def by_name(products):

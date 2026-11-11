@@ -66,6 +66,23 @@ It starts out agreeing with the formula and gains influence as labels add up (up
 
 > 🛡️ **Big-box sites fight bots.** Walmart, Target and Amazon use Akamai, PerimeterX and captchas, and their terms restrict automated access. DealHawk keeps per-site gaps between requests, backs off when blocked, and treats a captcha page as a failure. Keep intervals modest and the page list short, and rely on the community feeds, Keepa and official APIs for speed. The preset URLs are best-effort: check each one with `dealhawk once --source <name> -v`.
 
+## Built-in price API
+
+DealHawk has its own price API, similar to commercial services like PriceAPI but self-hosted and free. It reads prices straight from store pages, and every price it reads goes into DealHawk's own price-history database.
+
+| | dashboard | command line | HTTP (JSON) |
+|---|---|---|---|
+| **live price of one link** + history + Steal Score | paste a link → 🔎 Check price | `dealhawk price <url>` | `GET /api/price?url=…` |
+| **compare a product across stores**, cheapest first | type a name → 🔎 Compare stores | `dealhawk search "airpods pro" [--stores walmart,bestbuy]` | `GET /api/search?q=…&stores=…` |
+
+Results are cached for 5 minutes (`&fresh=1` to bypass). Every store reports ✓/✗ with a plain-English reason ("blocked by bot protection", "needs a real browser"…). Other programs (e.g. another app of yours) can call the API with a key:
+
+```bash
+curl -H "X-API-Key: $DEALHAWK_API_KEY" "http://localhost:8686/api/price?url=https://www.bestbuy.com/site/…/6565837.p"
+```
+
+Target and Amazon search pages are built in JavaScript, so they need the browser extra: `pip install playwright && playwright install chromium`.
+
 ## Track any product by its link
 
 Paste a product link in the dashboard's **📌 Track a product** bar (or run `dealhawk track add <url>`) and choose a mode:
@@ -119,6 +136,18 @@ dealhawk once --dry-run -v         # one pass, print instead of sending
 dealhawk run                       # 24/7
 ```
 
+### Troubleshooting
+
+**`CERTIFICATE_VERIFY_FAILED` on every source (common on macOS).** Python from python.org doesn't use the Mac's certificate store. DealHawk now loads the `certifi` bundle automatically, so update and reinstall:
+
+```bash
+git pull && pip install -e .
+```
+
+If it still happens, run `/Applications/Python\ 3.*/Install\ Certificates.command`, or `pip install --upgrade certifi`.
+
+**Port 8686 already in use.** Run `dealhawk run --port 8690`, or set `web.port` in `dealhawk.yaml`.
+
 ### WhatsApp setup (pick one)
 
 | provider | setup | replies train the model? |
@@ -135,6 +164,8 @@ WhatsApp rule: Twilio and Meta can only send free-form messages within 24 h of y
 
 ```
 dealhawk serve [--demo]            the live dashboard (also started by `dealhawk run`)
+dealhawk price <url>               live price + history + score of one product link
+dealhawk search "<product>"        compare a product across stores, cheapest first
 dealhawk deals [--hours 24] [-v]   recent deals in the terminal (🔔 = alerted, 🧪 = exploration)
 dealhawk review                    rate recent deals y/n — fastest way to teach it
 dealhawk feedback 123 good         rate one deal
@@ -171,6 +202,7 @@ dealhawk/
   matching.py     your watches (keywords, price caps…)     scheduler.py 24/7 loop, per-source backoff
   store.py        SQLite: history, alerts, labels, model   feedback.py 👍/👎 + WhatsApp reply webhooks
   web.py + web/   live dashboard, JSON API, SSE stream     demo.py     labelled sample data for --demo
+  priceapi.py     price lookup + cross-store search API    tracking.py products you track by link
   sources/        rss · reddit · retailer (+ harvest) · keepa · bestbuy · shopify · watch
   notify/         whatsapp · ntfy · telegram · discord · pushover · console
 tests/            every source parsed from fixtures; network blocked in tests

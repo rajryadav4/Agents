@@ -92,7 +92,7 @@ def test_engine_uses_claude_for_cold_start_and_respects_budget_and_cache(clock):
         Offer("sd", "Amazon", "MacBook stand $30", "u5", 30.0),
         Offer("sd", "Amazon", "MacBook sleeve $12", "u6", 12.0),
     ]
-    r = eng.process(offers)
+    eng.process(offers)
     calls = client.beta.messages.calls
     assert len(calls) == 2                                     # 5 candidates, batch 2, budget 2 calls/hour
     assert "Toaster" not in "".join(c["messages"][0]["content"] for c in calls)

@@ -68,8 +68,9 @@ class Scheduler:
                 offers = fut.result()
             except Exception as e:
                 self._reschedule(s, ok=False)
+                from .tracking import explain
                 log.warning("%s failed (%d in a row): %s", s.name, self.failures[s.name], e)
-                self._status(s, ok=False, error=str(e)[:200])
+                self._status(s, ok=False, error=explain(e)[:300])
                 continue
             report = self.engine.process(offers)   # processed on this thread: one writer
             alerts += len(report.alerted)

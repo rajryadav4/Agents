@@ -80,6 +80,7 @@ web:
   host: ${DEALHAWK_WEB_HOST:-127.0.0.1}
   port: ${DEALHAWK_WEB_PORT:-8686}
   password: ${DEALHAWK_WEB_PASSWORD:-}
+  api_key: ${DEALHAWK_API_KEY:-}        # other apps call /api/price, /api/search with header X-API-Key
 
 # ── Products you track by link (add them on the dashboard or `dealhawk track add <url>`) ──
 # 🎯 target price: alert when it's at or below your price.

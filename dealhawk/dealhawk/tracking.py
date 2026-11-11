@@ -7,9 +7,8 @@
 
 In both modes a suspected price glitch is re-verified live and sent at once.
 
-Prices are read in this order: Shopify JSON (for /products/ links) → the page's
-structured data (JSON-LD, Next.js/embedded state, Amazon HTML) → a real headless
-browser for JavaScript-heavy pages, if Playwright is installed.
+Prices are read by priceapi.PriceReader (Shopify JSON → structured page data →
+headless browser fallback), the same reader the price API uses.
 """
 
 from __future__ import annotations
@@ -24,9 +23,6 @@ from urllib.parse import urlparse
 from .models import Offer
 from .retailers import detect_retailer
 from .sources.base import FetchError, Http, Source
-from .sources.harvest import harvest_products
-from .sources.pagewatch import extract_product
-from .sources.retail import BrowserFetcher, _polite_wait
 
 log = logging.getLogger("dealhawk.tracking")
 MODES = ("target", "smart")
@@ -64,6 +60,9 @@ def explain(e: Exception, url: str = "") -> str:
         msg = msg[len(url):].lstrip(": ")
     low = msg.lower()
     status = getattr(e, "status", None)
+    if "certificate_verify_failed" in low or "certificate verify failed" in low:
+        return ("Python can't verify https certificates on this computer — run `pip install --upgrade certifi` "
+                "and restart DealHawk (on a Mac you can also run 'Install Certificates.command' in your Python folder)")
     if "tunnel connection failed" in low or "proxy" in low:
         return "this computer's network or proxy refused the connection to the store"
     if status in (403, 429, 503) or "captcha" in low:
@@ -77,24 +76,16 @@ def explain(e: Exception, url: str = "") -> str:
     return msg[:200]
 
 
-def _browser_available() -> bool:
-    try:
-        import playwright  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
 
 class Tracker:
     """Reads current prices for tracked links and feeds them to the engine."""
 
     def __init__(self, store, engine=None, http: Http | None = None, browser_fallback: bool = True,
                  min_gap_s: float = 3.0, clock=time.time):
+        from .priceapi import PriceReader
         self.store = store
         self.engine = engine
-        self.http = http or Http(retries=1)
-        self.browser = BrowserFetcher() if browser_fallback and _browser_available() else None
-        self.min_gap_s = min_gap_s
+        self.reader = PriceReader(http or Http(retries=1), browser_fallback=browser_fallback, min_gap_s=min_gap_s)
         self.clock = clock
 
     # ---- managing the list ----
@@ -116,52 +107,8 @@ class Tracker:
 
     # ---- reading prices ----
     def read_price(self, url: str) -> dict:
-        """{name, price, id, in_stock} from a product page. Raises FetchError when it can't."""
-        host = urlparse(url).hostname or ""
-        _polite_wait(host, self.min_gap_s, self.http.sleep)
-        if "/products/" in url:                                  # Shopify stores expose product JSON
-            try:
-                base = url.split("?")[0].rstrip("/")
-                data = self.http.get_json(base + ".json").get("product") or {}
-                variant_id = url.split("variant=")[1].split("&")[0] if "variant=" in url else None
-                vs = data.get("variants") or []
-                v = next((x for x in vs if str(x.get("id")) == variant_id), vs[0] if vs else None)
-                if v and v.get("price"):
-                    return {"name": data.get("title"), "price": float(v["price"]), "id": str(v.get("id")),
-                            "in_stock": v.get("available")}
-            except (FetchError, ValueError, KeyError, TypeError):
-                pass
-        error: FetchError | None = None
-        try:
-            page = self.http.get_text(url, {"Accept": "text/html,application/xhtml+xml",
-                                            "Accept-Language": "en-US,en;q=0.9"})
-            found = self._from_page(page, url)
-            if found:
-                return found
-            error = FetchError("no price found on the page — it may need a real browser (pip install playwright) "
-                               "or the store hides prices from bots")
-        except FetchError as e:
-            error = e
-        if self.browser is not None:
-            try:
-                found = self._from_page(self.browser(url), url)
-                if found:
-                    return found
-                error = FetchError("no price found, even in a real browser")
-            except FetchError as e:
-                error = e
-        raise error or FetchError("couldn't read the price")
-
-    @staticmethod
-    def _from_page(page: str, url: str) -> dict | None:
-        p = extract_product(page)
-        if p and p.get("price"):
-            return {"name": p.get("name"), "price": p["price"], "id": p.get("sku"), "in_stock": p.get("in_stock")}
-        products = harvest_products(page, url)
-        if len(products) == 1:
-            q = products[0]
-            return {"name": q["name"], "price": q["price"], "id": q["id"], "in_stock": q["in_stock"]}
-        return None
+        """{name, price, id, in_stock, method} — shared with the price API."""
+        return self.reader.read(url)
 
     # ---- checking ----
     def offer_for(self, t: dict) -> Offer:

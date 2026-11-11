@@ -1,4 +1,4 @@
-from dealhawk.brain import Brain, LearningConfig
+from dealhawk.brain import LearningConfig
 from dealhawk.config import AlertConfig, Config, QuietHours
 from dealhawk.engine import Engine, in_quiet_hours
 from dealhawk.matching import Watch

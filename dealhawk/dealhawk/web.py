@@ -12,6 +12,8 @@ Routes
     GET  /api/history/<deal_id>     price history of that product (for the chart)
     GET  /api/stream?after_id=N     Server-Sent Events: pushes each new deal instantly
     POST /api/deals/<id>/label      {"label": "good" | "bad"} — trains the model
+    GET  /api/price?url=…           price API: live price + history + Steal Score of one product link
+    GET  /api/search?q=…&stores=…   price API: one product across many stores, cheapest first
     GET  /api/tracked               products you track by link (+ their price history)
     POST /api/tracked               {"url", "mode": "target"|"smart", "target_price"}
     POST /api/tracked/<id>          change mode / target / active
@@ -20,7 +22,7 @@ Routes
     /fb/… /go/… /wa/…               phone feedback routes (feedback.py; token-protected)
 
 Hosting it: set `web.host: 0.0.0.0` and a `web.password` (HTTP Basic auth; any
-username). Feedback routes stay reachable for your phone/Twilio/Meta because
+username). Other programs can call /api/* with `X-API-Key: <web.api_key>`. Feedback routes stay reachable for your phone/Twilio/Meta because
 they carry their own HMAC tokens.
 """
 
@@ -51,6 +53,7 @@ class WebConfig:
     host: str = "127.0.0.1"        # 0.0.0.0 to reach it from other devices / when hosting
     port: int = 8686
     password: str = ""             # required when host isn't localhost
+    api_key: str = ""              # lets other programs call /api/* with an X-API-Key header
 
 
 def _int(q: dict, k: str, default: int | None) -> int | None:
@@ -61,7 +64,7 @@ def _int(q: dict, k: str, default: int | None) -> int | None:
 
 
 def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, demo: bool = False,
-                sources: list | None = None, tracker=None) -> ThreadingHTTPServer:
+                sources: list | None = None, tracker=None, priceapi=None) -> ThreadingHTTPServer:
     index_html = INDEX.read_text(encoding="utf-8")
     stopping = threading.Event()
     source_names = [s.name for s in (sources or [])]
@@ -93,6 +96,9 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
             self.reply(code, json.dumps(obj, default=str), ctype="application/json")
 
         def authorized(self) -> bool:
+            key = self.headers.get("X-API-Key") or ""
+            if web.api_key and key and hmac.compare_digest(key, web.api_key) and self.path.startswith("/api/"):
+                return True
             if not web.password:
                 return True
             h = self.headers.get("Authorization", "")
@@ -134,6 +140,8 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
                 return self.json({"key": deal["key"], "points": store.price_points(deal["key"])})
             if self.command == "GET" and path == "/api/stream":
                 return self._stream(_int(q, "after_id", None))
+            if self.command == "GET" and path in ("/api/price", "/api/search"):
+                return self._priceapi(path, q)
             if path == "/api/tracked" or path.startswith("/api/tracked/"):
                 return self._tracked(path)
             m = re.fullmatch(r"/api/deals/(\d+)/label", path)
@@ -151,6 +159,23 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
         do_GET = _route
         do_POST = _route
         do_DELETE = _route
+
+        def _priceapi(self, path: str, q: dict):
+            from .sources.base import FetchError
+            from .tracking import TrackError, explain
+            if priceapi is None:
+                return self.json({"error": "the price API is turned off"}, 503)
+            fresh = q.get("fresh", ["0"])[0] in ("1", "true")
+            try:
+                if path == "/api/price":
+                    return self.json(priceapi.lookup(q.get("url", [""])[0], fresh=fresh))
+                stores = [x for x in q.get("stores", [""])[0].split(",") if x] or None
+                return self.json(priceapi.search(q.get("q", [""])[0], stores, fresh=fresh,
+                                                 limit=min(_int(q, "limit", 40) or 40, 200)))
+            except (TrackError, ValueError) as e:
+                return self.json({"error": str(e)}, 400)
+            except FetchError as e:
+                return self.json({"error": explain(e), "status": e.status}, 502)
 
         def _tracked(self, path: str):
             from .models import slug
@@ -271,8 +296,9 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
 
 
 def serve_in_background(web: WebConfig, feedback_cfg, brain, store, demo: bool = False,
-                        sources: list | None = None, tracker=None) -> ThreadingHTTPServer:
-    srv = make_server(web, feedback_cfg, brain, store, demo=demo, sources=sources, tracker=tracker)
+                        sources: list | None = None, tracker=None, priceapi=None) -> ThreadingHTTPServer:
+    srv = make_server(web, feedback_cfg, brain, store, demo=demo, sources=sources, tracker=tracker,
+                      priceapi=priceapi)
     threading.Thread(target=srv.serve_forever, daemon=True, name="web").start()
     host = "localhost" if web.host in ("127.0.0.1", "0.0.0.0", "::") else web.host
     log.info("dashboard: http://%s:%d", host, srv.server_address[1])

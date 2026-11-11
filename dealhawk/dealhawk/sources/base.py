@@ -6,6 +6,7 @@ import gzip
 import json
 import logging
 import random
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -29,10 +30,30 @@ class FetchError(Exception):
 Fetcher = Callable[[str, dict, bytes | None], tuple[int, bytes]]
 
 
+def make_ssl_context() -> ssl.SSLContext:
+    """Trust the system's certificates *and* certifi's bundle.
+
+    Python from python.org on macOS ships without access to the Mac's keychain, so
+    every https request fails with CERTIFICATE_VERIFY_FAILED unless certifi's
+    Mozilla bundle is loaded. SSL_CERT_FILE / corporate proxy CAs still work:
+    the default context honours them and certifi is only added on top.
+    """
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+        ctx.load_verify_locations(cafile=certifi.where())
+    except (ImportError, OSError, ssl.SSLError) as e:  # pragma: no cover - depends on install
+        log.debug("certifi bundle not loaded: %s", e)
+    return ctx
+
+
+_SSL = make_ssl_context()
+
+
 def urllib_fetch(url: str, headers: dict, body: bytes | None = None, timeout: float = 20) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=body, headers=headers, method="POST" if body is not None else "GET")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL) as resp:
             data = resp.read()
             enc = (resp.headers.get("Content-Encoding") or "").lower()
             if enc == "gzip":

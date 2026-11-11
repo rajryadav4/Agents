@@ -91,7 +91,7 @@ def cmd_run(args) -> None:
     if cfg.web.enabled:
         try:
             srv = serve_in_background(cfg.web, cfg.feedback, engine.brain, store, sources=cfg.sources,
-                                      tracker=tracker)
+                                      tracker=tracker, priceapi=_priceapi(cfg, store))
         except OSError as e:
             sys.exit(f"dashboard: {e.strerror or e}")
         print(f"🦅 dashboard: {_url(cfg.web, srv)}")
@@ -108,6 +108,11 @@ def _runtime(cfg, store):
         if not any(s.type == "tracked" for s in cfg.sources):
             cfg.sources.append(TrackedSource("tracked-links", tracker, interval=cfg.tracking.interval))
     return engine, tracker
+
+
+def _priceapi(cfg, store):
+    from .priceapi import PriceAPI
+    return PriceAPI(store, scoring=cfg.scoring, browser_fallback=cfg.tracking.browser_fallback)
 
 
 def _url(web, srv) -> str:
@@ -139,7 +144,7 @@ def cmd_serve(args) -> None:
     from .web import make_server
     try:
         srv = make_server(cfg.web, cfg.feedback, engine.brain, store, demo=args.demo, sources=cfg.sources,
-                          tracker=tracker)
+                          tracker=tracker, priceapi=_priceapi(cfg, store))
     except OSError as e:
         sys.exit(f"dashboard: {e.strerror or e}")
     print(f"🦅 dashboard: {_url(cfg.web, srv)}" + ("   (DEMO — sample data, not real deals)" if args.demo else ""))
@@ -192,6 +197,53 @@ def cmd_track(args) -> None:
         for t in store.list_tracked(active_only=True):
             tracker.check(t["id"])
         cmd_track(argparse.Namespace(**{**vars(args), "action": "list"}))
+
+
+def cmd_price(args) -> None:
+    from .sources.base import FetchError
+    from .tracking import TrackError, explain
+    cfg, store = _load(args)
+    try:
+        r = _priceapi(cfg, store).lookup(args.url, fresh=True)
+    except TrackError as e:
+        sys.exit(str(e))
+    except FetchError as e:
+        sys.exit(f"couldn't read the price: {explain(e, args.url)}")
+    if args.json:
+        import json
+        print(json.dumps(r, indent=2, default=str))
+        return
+    h, sc = r["history"], r["score"]
+    stock = {True: "in stock", False: "OUT OF STOCK", None: "stock unknown"}[r["in_stock"]]
+    print(f"{r['title']}\n  ${r['price']:,.2f} at {r['retailer']} · {stock} · read via {r['method']}")
+    if h["count"] > 1:
+        print(f"  history: {h['count']} prices · low ${h['low']:,.2f} · high ${h['high']:,.2f}")
+    print(f"  steal score {sc['value']}/100 ({sc['tier']}, {sc['basis']})")
+    for reason in sc["reasons"]:
+        print(f"   • {reason}")
+
+
+def cmd_search(args) -> None:
+    from .priceapi import DEFAULT_STORES
+    cfg, store = _load(args)
+    stores = args.stores.split(",") if args.stores else DEFAULT_STORES
+    print(f"searching {', '.join(stores)} for “{args.query}”…")
+    try:
+        r = _priceapi(cfg, store).search(args.query, stores, limit=args.limit, fresh=True)
+    except ValueError as e:
+        sys.exit(str(e))
+    if args.json:
+        import json
+        print(json.dumps(r, indent=2, default=str))
+        return
+    for name, st in r["stores"].items():
+        print(f"  {'✓' if st['ok'] else '✗'} {name:<12} {st['count']} result(s)" +
+              ("" if st["ok"] else f" — {st['error']}"))
+    if not r["results"]:
+        print("\nno prices found")
+    for x in r["results"]:
+        flag = " 🚨" if x["score"]["tier"] == "steal" else ""
+        print(f"  ${x['price']:>10,.2f}  {x['retailer'][:12]:<12} {x['title'][:60]}{flag}\n               {x['url']}")
 
 
 def cmd_webhooks(args) -> None:
@@ -360,6 +412,16 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("url", nargs="?", help="product link (add) or id (rm)")
     s.add_argument("--target", type=float, help="alert when the price is at or below this; omit for AI watch")
     s.set_defaults(fn=cmd_track)
+    s = cmd("price", "price API: live price + history of one product link")
+    s.add_argument("url")
+    s.add_argument("--json", action="store_true", help="print the raw API response")
+    s.set_defaults(fn=cmd_price)
+    s = cmd("search", "price API: compare one product across stores, cheapest first")
+    s.add_argument("query")
+    s.add_argument("--stores", help="comma-separated, e.g. walmart,bestbuy,newegg (default: 8 big stores)")
+    s.add_argument("--limit", type=int, default=25)
+    s.add_argument("--json", action="store_true", help="print the raw API response")
+    s.set_defaults(fn=cmd_search)
     s = cmd("webhooks", "print the WhatsApp webhook URLs for Twilio / Meta")
     s.set_defaults(fn=cmd_webhooks)
     s = cmd("brain", "show what the model has learned")

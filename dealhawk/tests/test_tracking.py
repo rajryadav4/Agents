@@ -132,7 +132,7 @@ def test_shopify_link_uses_product_json(clock):
     tr = Tracker(store, None, http=Http(fetcher=f, retries=0, sleep=lambda s: None), browser_fallback=False,
                  min_gap_s=0)
     assert tr.read_price("https://www.allbirds.com/products/wool-runner?variant=7") == \
-        {"name": "Wool Runner", "price": 60.0, "id": "7", "in_stock": True}
+        {"name": "Wool Runner", "price": 60.0, "id": "7", "in_stock": True, "method": "shopify-json"}
 
 
 def test_dashboard_tracking_api(clock):

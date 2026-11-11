@@ -43,6 +43,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg); color: var(--text);
@@ -166,7 +167,7 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
 .trackbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 10px; margin-bottom: 12px; }
 .trackbar .lbl { font-weight: 700; padding: 0 6px; white-space: nowrap; }
-.trackbar input[type=url] { flex: 1 1 280px; min-width: 0; height: 38px; border: 1px solid var(--line); border-radius: 10px;
+.trackbar #trackUrl { flex: 1 1 280px; min-width: 0; height: 38px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--bg); padding: 0 12px; outline: 0; }
 .trackbar input:focus { border-color: var(--accent); }
 .money { display: flex; align-items: center; height: 38px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 0 10px; }
@@ -176,6 +177,29 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .primary { color: #0b1220; } }
 .primary:disabled { opacity: .6; cursor: default; }
 .formerr { flex-basis: 100%; color: var(--bad); font-size: 13px; padding: 0 6px; }
+.primary.ghost { background: var(--panel-2); color: var(--text) !important; border: 1px solid var(--line); }
+#lookup { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin: -4px 0 14px; }
+#lookup .lhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+#lookup .lhead h2 { font-size: 15px; margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#lookup .close { border: 0; background: transparent; font-size: 18px; color: var(--muted); cursor: pointer; }
+#lookup .one { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: center; }
+#lookup .one .big { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+#lookup .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#lookup .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+#lookup .acts button, #lookup .row button { height: 34px; border: 1px solid var(--line); background: var(--panel); border-radius: 9px;
+  padding: 0 12px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+#lookup .acts button:hover, #lookup .row button:hover { border-color: var(--accent); color: var(--accent); }
+#lookup .rows { display: flex; flex-direction: column; }
+#lookup .row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0;
+  border-top: 1px solid var(--line); }
+#lookup .row .p { font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; }
+#lookup .row .t { min-width: 0; }
+#lookup .row .t a { color: var(--text); text-decoration: none; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lookup .row .t small { color: var(--muted); }
+#lookup .row.best .p { color: var(--good); }
+#lookup .spin { color: var(--muted); padding: 6px 0; }
+@media (max-width: 700px) { #lookup .one { grid-template-columns: minmax(0, 1fr); } #lookup .row { grid-template-columns: 84px minmax(0, 1fr); }
+  #lookup .row button { grid-column: 1 / -1; } }
 .tracked { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-bottom: 18px; }
 .titem { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex;
   flex-direction: column; gap: 8px; min-width: 0; }
@@ -237,16 +261,18 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
   </section>
 
   <form class="trackbar" id="trackForm" autocomplete="off">
-    <span class="lbl">📌 Track a product</span>
-    <input type="url" id="trackUrl" placeholder="Paste a product link — walmart.com/ip/…, bestbuy.com/site/…, any store" required>
+    <span class="lbl">🔎 Price check</span>
+    <input type="text" id="trackUrl" placeholder="Paste a product link — or type a product name to compare stores" required>
+    <button class="primary ghost" id="lookupBtn" type="button">🔎 Check price</button>
     <div class="seg" id="modeSeg">
       <button type="button" data-mode="smart" class="on" title="DealHawk alerts you at its lowest price or when it's a steal">🤖 AI watch</button>
       <button type="button" data-mode="target" title="Alert me when it's at or below my price">🎯 My price</button>
     </div>
     <label class="money" id="targetWrap" hidden>$<input id="trackTarget" type="number" min="0.01" step="0.01" placeholder="alert at"></label>
-    <button class="primary" id="trackBtn" type="submit">Track</button>
+    <button class="primary" id="trackBtn" type="submit">📌 Track</button>
     <div class="formerr" id="trackErr" hidden></div>
   </form>
+  <section id="lookup" hidden></section>
   <section id="trackedWrap" hidden>
     <div class="sectionhead"><h2>Tracked products</h2><small id="trackedCount"></small></div>
     <div class="tracked" id="tracked"></div>
@@ -514,6 +540,7 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
 
   $("trackForm").addEventListener("submit", async (e) => {
     e.preventDefault(); showErr("");
+    if (!isUrl($("trackUrl").value)) { $("lookupBtn").click(); return; }
     const body = { url: $("trackUrl").value.trim(), mode: trackMode };
     if (trackMode === "target") body.target_price = $("trackTarget").value;
     $("trackBtn").disabled = true;
@@ -521,11 +548,100 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
       const r = await fetch("/api/tracked", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "couldn’t add that link");
-      $("trackUrl").value = ""; $("trackTarget").value = "";
+      $("trackUrl").value = ""; $("trackTarget").value = ""; paintLookupBtn();
       toast("📌 Tracking — checking the price now…");
       loadTracked(); setTimeout(loadTracked, 4000); setTimeout(loadTracked, 12000);
     } catch (err) { showErr(err.message); }
     finally { $("trackBtn").disabled = false; }
+  });
+
+  // ---------- price API: check one link / compare stores ----------
+  const isUrl = (v) => /^https?:\/\//i.test(v.trim());
+  const paintLookupBtn = () => {
+    const v = $("trackUrl").value;
+    $("lookupBtn").textContent = v && !isUrl(v) ? "🔎 Compare stores" : "🔎 Check price";
+    $("trackBtn").disabled = !!v && !isUrl(v);
+  };
+  $("trackUrl").addEventListener("input", paintLookupBtn);
+
+  function lookupShell(title, body) {
+    const box = $("lookup"); box.hidden = false;
+    box.innerHTML = `<div class="lhead"><h2>${title}</h2><button class="close" title="Close" data-l="close">✕</button></div>${body}`;
+  }
+  const stockText = (v) => v === true ? `<span class="flag ok">In stock</span>` : v === false ? `<span class="flag warn">Out of stock</span>` : "";
+
+  async function trackFromLookup(url, mode, target) {
+    const r = await fetch("/api/tracked", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, mode, target_price: target }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "couldn’t track that");
+    toast("📌 Tracking it"); loadTracked();
+  }
+
+  $("lookup").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-l]"); if (!b) return;
+    try {
+      if (b.dataset.l === "close") { $("lookup").hidden = true; return; }
+      if (b.dataset.l === "smart") await trackFromLookup(b.dataset.url, "smart");
+      if (b.dataset.l === "target") {
+        const v = prompt("Alert me when it’s at or below ($):", b.dataset.price ? Math.floor(Number(b.dataset.price) * 0.85) : "");
+        if (v) await trackFromLookup(b.dataset.url, "target", v);
+      }
+    } catch (err) { toast(err.message); }
+  });
+
+  async function checkPrice(url) {
+    lookupShell("Checking the live price…", `<div class="spin">Reading ${esc(url)}</div>`);
+    try {
+      const r = await fetch(`/api/price?url=${encodeURIComponent(url)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "couldn’t read the price");
+      const h = d.history, sc = d.score;
+      lookupShell(esc(d.title), `
+        <div class="one">
+          <div>
+            <div class="big">${money(d.price)}</div>
+            <div class="meta">${esc(d.retailer)} · checked ${ago(d.checked_at)}${d.cached ? " (cached)" : ""}</div>
+            <div class="chips">${stockText(d.in_stock)}<span class="flag">${sc.value}/100 · ${esc(sc.tier)}</span>
+              ${sc.glitch_suspect ? `<span class="flag glitch">⚡ Possible price glitch</span>` : ""}
+              ${h.count > 1 ? `<span class="flag">low ${money(h.low)} · high ${money(h.high)} · ${h.count} prices</span>` : `<span class="flag">first time DealHawk has seen this item</span>`}</div>
+            ${sc.reasons.length ? `<ul class="why">${sc.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+            <div class="acts">
+              <button data-l="smart" data-url="${esc(d.url)}">🤖 Track — AI watch</button>
+              <button data-l="target" data-url="${esc(d.url)}" data-price="${d.price}">🎯 Track — alert at my price</button>
+              ${safeUrl(d.url) ? `<a class="open" style="flex:0 0 auto" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ""}
+            </div>
+          </div>
+          <div>${spark(h.points) || `<div class="meta">The price chart fills in as DealHawk keeps checking.</div>`}</div>
+        </div>`);
+    } catch (err) { lookupShell("Couldn’t read the price", `<div class="err" style="color:var(--warn)">⚠️ ${esc(err.message)}</div>`); }
+  }
+
+  async function compareStores(q) {
+    lookupShell(`Comparing “${esc(q)}”…`, `<div class="spin">Searching store pages — this can take 10–30 seconds.</div>`);
+    try {
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "search failed");
+      const stores = Object.entries(d.stores).map(([n, st]) =>
+        `<span class="flag ${st.ok ? (st.count ? "ok" : "") : "warn"}" title="${esc(st.error || "")}">${st.ok ? "✓" : "✗"} ${esc(n)} ${st.ok ? st.count : ""}</span>`).join("");
+      const rows = d.results.map((x, i) => `
+        <div class="row ${i === 0 ? "best" : ""}">
+          <div class="p">${money(x.price)}</div>
+          <div class="t"><a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener noreferrer" title="${esc(x.title)}">${esc(x.title)}</a>
+            <small>${esc(x.retailer)}${x.was_price ? ` · was ${money(x.was_price)}` : ""}${x.score.tier === "steal" ? " · 🚨 steal" : ""}${i === 0 ? " · cheapest" : ""}</small></div>
+          <button data-l="smart" data-url="${esc(x.url)}">📌 Track</button>
+        </div>`).join("");
+      const errs = Object.entries(d.stores).filter(([, st]) => !st.ok).map(([n, st]) => `<li><b>${esc(n)}</b>: ${esc(st.error)}</li>`).join("");
+      lookupShell(`${d.count} price${d.count === 1 ? "" : "s"} for “${esc(d.query)}”`,
+        `<div class="chips">${stores}</div>${rows ? `<div class="rows">${rows}</div>` : `<div class="meta">No prices found.</div>`}
+         ${errs ? `<ul class="why" style="margin-top:8px">${errs}</ul>` : ""}`);
+    } catch (err) { lookupShell("Search failed", `<div class="err" style="color:var(--warn)">⚠️ ${esc(err.message)}</div>`); }
+  }
+
+  $("lookupBtn").addEventListener("click", () => {
+    const v = $("trackUrl").value.trim(); if (!v) return $("trackUrl").focus();
+    showErr(""); isUrl(v) ? checkPrice(v) : compareStores(v);
   });
 
   function spark(points) {

@@ -40,7 +40,7 @@ def slug(text: str) -> str:
 class Offer:
     """One product at one price at one retailer, as seen by a source."""
 
-    source: str                       # which source produced it, e.g. "slickdeals-frontpage"
+    source: str                       # which source produced it, e.g. "walmart"
     retailer: str                     # "Amazon", "Walmart", ...
     title: str
     url: str
@@ -58,6 +58,11 @@ class Offer:
     low_price: float | None = None         # source-supplied historic low
     tags: list[str] = field(default_factory=list)
     tracked_id: int | None = None          # set when this is a product you asked DealHawk to track
+    # where the price comes from:
+    #   first-party   read directly from the retailer (its page, official API, or store JSON)
+    #   price-tracker a price-history service that records the retailer's own prices (Keepa)
+    #   community     a person's post — only a lead; it must be confirmed on the store page first
+    trust: str = "first-party"
 
     @property
     def key(self) -> str:

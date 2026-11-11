@@ -34,5 +34,5 @@ def test_retailer_detection():
     assert retailer_from_title("Ninja air fryer $49 at Walmart") == "Walmart"
     assert retailer_from_title("[SSD] Samsung 990 Pro (Amazon)") == "Amazon"
     assert retailer_from_title("Best Buy: OLED TV $999") == "Best Buy"
-    assert detect_retailer("https://slickdeals.net/f/1", "Thing $5 @ Target") == "Target"
+    assert detect_retailer("https://forum.example.com/t/1", "Thing $5 @ Target") == "Target"
     assert detect_retailer(None, "mystery") == "Unknown"

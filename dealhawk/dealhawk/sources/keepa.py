@@ -38,6 +38,7 @@ def _decode_image(img) -> str | None:
 class KeepaSource(Source):
     type = "keepa"
     default_interval = 300
+    trust = "price-tracker"   # Keepa records Amazon's own listed prices
 
     def __init__(self, name: str, api_key: str, domain: str = "com", price_type: str = "new",
                  min_drop_percent: int = 40, title_search: str | None = None,
@@ -92,6 +93,7 @@ class KeepaSource(Source):
             low_price=min(lows) if lows else None,
             image=_decode_image(d.get("image")),
             tags=["keepa"],
+            trust=self.trust,
         )
 
     def fetch(self) -> list[Offer]:

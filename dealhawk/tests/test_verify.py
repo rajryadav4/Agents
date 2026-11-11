@@ -97,3 +97,53 @@ def test_unverifiable_glitch_still_sent_with_warning(clock):
     eng.process([tv(296.99)])
     assert sink.sent[0].headline.startswith("⚡ POSSIBLE PRICE GLITCH")
     assert "couldn't verify" in sink.sent[0].score.reasons[0]
+
+
+def community_post(price, url="https://www.target.com/p/tv/-/A-1"):
+    return Offer("reddit", "Target", 'LG 65" C4 OLED TV', url, price, product_id="A-1", trust="community")
+
+
+def community_engine(clock, routes):
+    cfg = Config(database=":memory:", watches=[Watch("all")], alerts=AlertConfig(min_score=40),
+                 learning=LearningConfig(explore_per_day=0, crowd_labels=False))
+    store, sink = Store(":memory:"), Sink()
+    v, f = verifier(routes)
+    eng = Engine(cfg, store, notifiers=[sink], verifier=v, clock=clock)
+    for _ in range(6):                                   # store's own price history (first-party)
+        eng.process([tv(1999.0, title='LG 65" C4 OLED TV')])
+        clock.advance(7 * 3600)
+    return eng, store, sink, f
+
+
+def test_community_post_confirmed_on_store_page_is_shown(clock):
+    eng, store, sink, _ = community_engine(clock, {"target.com": (200, PAGE % "1199.00")})
+    eng.process([community_post(1199.0)])
+    assert len(sink.sent) == 1
+    d = sink.sent[0]
+    assert d.score.reasons[0].startswith("✅ confirmed on Target's own page")
+    row = store.recent_deals()[0]
+    assert row["trust"] == "community" and row["verified"] == "confirmed"
+
+
+def test_unconfirmed_community_posts_never_reach_the_dashboard(clock):
+    for routes, why in [({"target.com": (200, PAGE % "1999.00")}, "store's page shows $1,999.00"),
+                        ({"target.com": (403, "captcha")}, "403")]:
+        eng, store, sink, _ = community_engine(clock, routes)
+        before = store.stats()["price_points"]
+        r = eng.process([community_post(299.0)])
+        assert sink.sent == [] and store.recent_deals() == []                # not shown, not logged
+        assert r.suppressed[0][1].startswith("unconfirmed community post") and why in r.suppressed[0][1]
+        assert store.stats()["price_points"] == before                        # claimed price never stored
+
+
+def test_confirmation_happens_even_when_glitch_verify_is_off(clock):
+    cfg = Config(database=":memory:", watches=[Watch("all")], alerts=AlertConfig(min_score=0),
+                 learning=LearningConfig(explore_per_day=0, crowd_labels=False))
+    from dealhawk.verify import VerifyConfig as VC
+    f = FakeFetcher({"target.com": (403, "")})
+    v = PriceVerifier(VC(enabled=False), http=Http(fetcher=f, retries=0, sleep=lambda s: None))
+    sink = Sink()
+    eng = Engine(cfg, Store(":memory:"), notifiers=[sink], verifier=v, clock=clock)
+    eng.process([community_post(10.0, url="https://www.target.com/p/x")])
+    assert sink.sent == [] and len(f.calls) == 1
+

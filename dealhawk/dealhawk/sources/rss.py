@@ -1,8 +1,8 @@
-"""Generic RSS 2.0 / Atom source, with presets for the big deal communities.
+"""Generic RSS 2.0 / Atom source (community feeds — off by default).
 
-Community deal sites are the best "any retailer" firehose: thousands of
-hunters post Walmart/Target/Costco/Amazon price drops within minutes, including
-price mistakes. We parse the price out of each post title and score it.
+Posts in community feeds are written by people, so DealHawk treats them only as
+*leads*: before a post can be shown or alert you, its price is re-read from the
+retailer's own page (verify.py) and dropped unless it is confirmed.
 """
 
 from __future__ import annotations
@@ -20,9 +20,6 @@ from ..retailers import detect_retailer, retailer_from_url
 from .base import Source
 
 PRESETS = {
-    "slickdeals_frontpage": "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&searchin=first&rss=1",
-    "slickdeals_popular": "https://slickdeals.net/newsearch.php?mode=popdeals&searcharea=deals&searchin=first&rss=1",
-    "slickdeals_search": "https://slickdeals.net/newsearch.php?q={query}&searcharea=deals&searchin=first&rss=1",
     "reddit_buildapcsales": "https://www.reddit.com/r/buildapcsales/new/.rss",
     "reddit_deals": "https://www.reddit.com/r/deals/new/.rss",
     "reddit_frugalmalefashion": "https://www.reddit.com/r/frugalmalefashion/new/.rss",
@@ -83,6 +80,7 @@ def parse_feed(xml_text: str) -> list[dict]:
 class RssSource(Source):
     type = "rss"
     default_interval = 120
+    trust = "community"     # posts are leads: each one is confirmed on the store's own page before use
 
     def __init__(self, name: str, url: str | None = None, preset: str | None = None,
                  query: str | None = None, **kw):
@@ -114,6 +112,7 @@ class RssSource(Source):
             community_score=int(votes.group(1)) if votes else None,
             posted_at=item["published"],
             tags=tags,
+            trust=self.trust,
         )
 
     def fetch(self) -> list[Offer]:

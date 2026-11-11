@@ -101,7 +101,7 @@ class Store:
     # columns added after the first release; older databases are upgraded on open
     DEAL_COLUMNS = {"typical": "REAL", "discount": "REAL", "glitch": "INTEGER DEFAULT 0",
                     "record_low": "INTEGER DEFAULT 0", "verified": "TEXT", "image": "TEXT",
-                    "source": "TEXT", "category": "TEXT"}
+                    "source": "TEXT", "category": "TEXT", "trust": "TEXT"}
 
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
@@ -189,12 +189,12 @@ class Store:
             cur = self._db.execute(
                 "INSERT INTO deals(key, ts, retailer, title, url, price, score, tier, basis, watch, reasons,"
                 " notified, explore, features, typical, discount, glitch, record_low, verified, image, source,"
-                " category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " category, trust) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (o.key, ts or time.time(), o.retailer, o.title, o.url, o.price, s.value, s.tier,
                  s.basis, deal.watch, json.dumps(s.reasons), int(notified), int(deal.explore),
                  json.dumps(deal.features) if deal.features else None,
                  s.typical_price or o.reference_price, s.discount, int(s.glitch_suspect), int(s.record_low),
-                 getattr(v, "status", None), o.image, o.source, o.category),
+                 getattr(v, "status", None), o.image, o.source, o.category, o.trust),
             )
             self._db.commit()
             return cur.lastrowid

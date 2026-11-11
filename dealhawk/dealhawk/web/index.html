@@ -368,6 +368,10 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
     else if (d.verified === "unverifiable") flags.push(`<span class="flag warn">⚠️ Not verified</span>`);
     if (d.record_low) flags.push(`<span class="flag low">Record low</span>`);
     if (d.explore) flags.push(`<span class="flag learn">🧪 Is this good for you?</span>`);
+    if (state.demo) flags.push(`<span class="flag warn">Sample data</span>`);
+    else if (d.trust === "community") flags.push(`<span class="flag ok" title="Posted by a person, then confirmed on the store's own page">✓ Confirmed on store page</span>`);
+    else if (d.trust === "price-tracker") flags.push(`<span class="flag ok" title="Price recorded from the retailer by Keepa">✓ Keepa price data</span>`);
+    else flags.push(`<span class="flag ok" title="Price read directly from ${esc(d.retailer)}">✓ Price from ${esc(d.retailer)}</span>`);
     if (d.basis === "history") flags.push(`<span class="flag">From price history</span>`);
     else if (d.basis === "reference") flags.push(`<span class="flag">vs. claimed “was” price</span>`);
     const reasons = (d.reasons || []).slice(0, 3).map((r) => `<li>${esc(r)}</li>`).join("");

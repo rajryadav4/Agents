@@ -121,25 +121,10 @@ watches:
     min_score: 85
 
 # ── Where to look ───────────────────────────────────────────────────────
-# Community feeds cover every retailer (Walmart, Target, Costco, Home Depot,
-# Newegg, B&H, Kohl's …) because thousands of hunters post there within minutes.
+# Verified sources only: every price is read directly from the retailer (its own
+# pages, official API or store data), or from Keepa's record of Amazon's prices.
+# Products you track by link (dashboard / `dealhawk track add`) are checked too.
 sources:
-  - type: rss
-    preset: slickdeals_frontpage
-    interval: 120              # seconds
-  - type: rss
-    preset: slickdeals_popular
-    interval: 180
-  - type: rss
-    name: slickdeals-macbook
-    preset: slickdeals_search
-    query: macbook
-    interval: 300
-  - type: reddit
-    name: reddit-deals
-    subreddits: [buildapcsales, deals, AppleDeals, GameDeals, frugalmalefashion]
-    interval: 120
-
   # Big retailers' own deal / clearance / search pages, read with a generic product
   # harvester. See dealhawk/sources/retail.py for presets. These sites fight bots:
   # keep intervals modest, expect occasional blocks (DealHawk backs off), and
@@ -169,6 +154,11 @@ sources:
     retailer: bestbuy
     pages: [deal-of-the-day, open-box]
     interval: 600
+  - type: retailer
+    name: newegg
+    retailer: newegg
+    pages: [todays-deals, shell-shocker]
+    interval: 900
   - type: retailer
     name: more-stores        # any store: retailer "other" + full URLs
     retailer: other
@@ -201,6 +191,14 @@ sources:
       - https://www.allbirds.com
       - {url: https://www.gymshark.com, name: Gymshark}
     interval: 900
+
+  # Community deal posts (Reddit) are OFF and not recommended. If you turn them on,
+  # each post is only a lead: it's shown or alerted ONLY after its price is
+  # confirmed on the retailer's own page, and dropped otherwise.
+  # - type: reddit
+  #   name: reddit-leads
+  #   subreddits: [buildapcsales, AppleDeals]
+  #   interval: 300
 
   # Specific product pages you care about (schema.org price markup)
   - type: watch

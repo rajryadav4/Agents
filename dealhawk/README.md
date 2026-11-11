@@ -7,10 +7,10 @@ It ignores everyday "20% off" noise. It alerts you when something is priced far 
 ```
  sources (every 2–15 min)                    brain                                   you
  ───────────────────────                     ─────                                   ───
- Slickdeals · Reddit deal subs ─┐   formula: price vs the item's OWN history ─┐
+ your tracked product links ───┐   formula: price vs the item's OWN history ─┐
  Walmart · Target · Amazon      │   (record low? σ-drop? below usual sale?)   │   WhatsApp / ntfy /
  Best Buy · Costco · Home Depot ├─► Claude: market knowledge, fake-deal check ├─► Telegram / Discord
- Newegg · B&H · 12 more         │   learned model: your 👍/👎 + crowd signals │   with the link
+ Newegg · B&H · 12 more         │   learned model: your 👍/👎 + your clicks   │   with the link
  Keepa (Amazon) · Shopify · URLs┘   glitch? → re-check the live price NOW  ───┘   + 👍/👎 to train it
 ```
 
@@ -35,10 +35,10 @@ With no history yet, it falls back to source stats (Keepa's 90-day average), the
 
 **2. Claude as a judge** (optional, `dealhawk/llm.py`). This covers what a formula can't do. Claude knows roughly what a product sells for, so it can rate items with zero history (a new MacBook post at $1,299 gets flagged right away). It also catches "MacBook Pro" listings that are really a $15 case. Requests are batched (10 offers per call), cached, capped per hour, use structured JSON output, and have server-side refusal fallback enabled.
 
-**3. A model that learns you** (`dealhawk/learner.py`, `brain.py`). This is online logistic regression over deal features: discount, record low, retailer, category, price band, title words, Claude's verdict, crowd heat. It trains on:
+**3. A model that learns you** (`dealhawk/learner.py`, `brain.py`). This is online logistic regression over deal features: discount, record low, retailer, category, price band, title words, Claude's verdict. It trains on:
 - your **👍 / 👎** (alert buttons, a WhatsApp reply like `good 123`, or `dealhawk review`)
 - **clicks** on "Open deal" (weak signal)
-- **the crowd:** posts that get upvoted fast or sell out within hours count as positives, and posts nobody cares about count as negatives. So it keeps learning without you.
+- **the crowd** (only if you turn community leads on): posts that get upvoted fast or sell out within hours count as positives.
 
 It starts out agreeing with the formula and gains influence as labels add up (up to 80%). Up to 6 times a day it **explores**: it sends a "🧪 good deal?" alert just below your threshold to learn your taste faster. `dealhawk brain` shows what it has learned.
 
@@ -56,15 +56,16 @@ It starts out agreeing with the formula and gains influence as labels add up (up
 
 | source | covers | notes |
 |---|---|---|
-| `rss` presets: Slickdeals frontpage / popular / search, Reddit subs | **every retailer** | Thousands of hunters post Walmart, Target and Amazon glitches within minutes. This is the most reliable "instant" channel. |
-| `reddit` JSON | r/buildapcsales, r/deals, r/AppleDeals… | Upvote velocity feeds the score; falls back to RSS if blocked |
+| `tracked` | every product link you add | Checked automatically; see "Track any product" below |
 | `retailer` | Walmart, Target, Amazon, Best Buy, Costco, Home Depot, Lowe's, Newegg, B&H, Micro Center, Sam's Club, Macy's, Kohl's, Dell, Apple Refurb, eBay, GameStop, Wayfair, **any store** (`other` + URLs) | Deal, clearance and search pages read by a generic harvester (JSON-LD, `__NEXT_DATA__`, embedded state, Amazon HTML). `browser: true` renders JS-heavy pages. |
 | `keepa` | Amazon | Paid API; tracks Amazon's own price history. The best Amazon source. |
 | `bestbuy` | Best Buy | Official free API, exact live prices |
 | `shopify` | any Shopify store | Public `products.json`, builds true per-variant history |
 | `watch` | specific product URLs | Builds price history for the exact items you care about |
 
-> 🛡️ **Big-box sites fight bots.** Walmart, Target and Amazon use Akamai, PerimeterX and captchas, and their terms restrict automated access. DealHawk keeps per-site gaps between requests, backs off when blocked, and treats a captcha page as a failure. Keep intervals modest and the page list short, and rely on the community feeds, Keepa and official APIs for speed. The preset URLs are best-effort: check each one with `dealhawk once --source <name> -v`.
+**Verified sources only.** Every price DealHawk shows is read directly from the retailer (its pages, official API or store data) or from Keepa's record of Amazon's prices. Each deal card says where its price came from ("✓ Price from Walmart"). Community deal sites are not used. Reddit is still available as an opt-in `reddit` / `rss` source, but only as *leads*: a post is shown or alerted **only after its price is confirmed on the retailer's own page**. Unconfirmed posts are dropped, and their claimed prices never enter the price history.
+
+> 🛡️ **Big-box sites fight bots.** Walmart, Target and Amazon use Akamai, PerimeterX and captchas, and their terms restrict automated access. DealHawk keeps per-site gaps between requests, backs off when blocked, and treats a captcha page as a failure. Keep intervals modest and the page list short, and rely on Keepa, the official APIs and your tracked links for speed. The preset URLs are best-effort: check each one with `dealhawk once --source <name> -v`.
 
 ## Built-in price API
 
@@ -186,7 +187,7 @@ Glitches often last minutes, so **speed matters more than anything**. Pick a hos
 
 `deploy/claude-cloud/run.sh` does one full pass. Because each cloud session starts in a fresh container, it restores and saves the database (price history, sent alerts, learned model) on a `dealhawk-state` git branch. To set it up:
 
-1. **Allow the hosts** in the cloud environment's network settings (environment menu → Edit → Network access → Allowed domains): `slickdeals.net`, `www.reddit.com`, `api.callmebot.com` / `api.twilio.com` / `graph.facebook.com`, `api.anthropic.com`, plus the retailers and APIs you enable (`www.walmart.com`, `api.keepa.com`, `api.bestbuy.com`, …). [Docs](https://code.claude.com/docs/en/cloud-environments#network-access)
+1. **Allow the hosts** in the cloud environment's network settings (environment menu → Edit → Network access → Allowed domains): `api.callmebot.com` / `api.twilio.com` / `graph.facebook.com`, `api.anthropic.com`, plus the retailers and APIs you enable (`www.walmart.com`, `api.keepa.com`, `api.bestbuy.com`, …). [Docs](https://code.claude.com/docs/en/cloud-environments#network-access)
 2. **Add your secrets** (WhatsApp, Keepa, `ANTHROPIC_API_KEY`) as environment variables in the same settings.
 3. **Create a scheduled task** that runs `bash dealhawk/deploy/claude-cloud/run.sh` every hour.
 
@@ -203,7 +204,7 @@ dealhawk/
   store.py        SQLite: history, alerts, labels, model   feedback.py 👍/👎 + WhatsApp reply webhooks
   web.py + web/   live dashboard, JSON API, SSE stream     demo.py     labelled sample data for --demo
   priceapi.py     price lookup + cross-store search API    tracking.py products you track by link
-  sources/        rss · reddit · retailer (+ harvest) · keepa · bestbuy · shopify · watch
+  sources/        retailer (+ harvest) · keepa · bestbuy · shopify · watch · (opt-in leads: reddit · rss)
   notify/         whatsapp · ntfy · telegram · discord · pushover · console
 tests/            every source parsed from fixtures; network blocked in tests
 ```

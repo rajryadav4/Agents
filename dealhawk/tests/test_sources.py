@@ -14,10 +14,10 @@ from dealhawk.sources.shopify import ShopifySource
 from .conftest import fixture_text
 
 
-def test_slickdeals_rss(fake_http):
-    http, _ = fake_http({"slickdeals.net": (200, fixture_text("slickdeals.rss"))})
-    offers = RssSource("sd", preset="slickdeals_frontpage", http=http).fetch()
-    assert len(offers) == 4
+def test_community_rss_feed_is_marked_as_leads(fake_http):
+    http, _ = fake_http({"forum.example.com": (200, fixture_text("community_feed.rss"))})
+    offers = RssSource("feed", url="https://forum.example.com/feed.rss", http=http).fetch()
+    assert len(offers) == 4 and {o.trust for o in offers} == {"community"}
     mac, fryer, tv, coupon = offers
     assert mac.price == 1299 and mac.retailer == "Amazon"
     assert mac.url.startswith("https://www.amazon.com/dp/")       # straight to the store, not the forum
@@ -27,11 +27,11 @@ def test_slickdeals_rss(fake_http):
     assert coupon.price is None
 
 
-def test_rss_search_preset_quotes_query():
-    s = RssSource("q", preset="slickdeals_search", query="macbook pro m4")
-    assert "q=macbook+pro+m4" in s.url
+def test_presets_have_no_slickdeals_and_validate():
+    assert not any("slickdeals" in k or "slickdeals" in v for k, v in PRESETS.items())
+    assert RssSource("r", preset="reddit_buildapcsales").url.startswith("https://www.reddit.com/")
     with pytest.raises(ValueError):
-        RssSource("bad", preset="nope")
+        RssSource("bad", preset="slickdeals_frontpage")
 
 
 def test_atom_feed_reddit_rss():
@@ -46,6 +46,7 @@ def test_reddit_json(fake_http):
     http, _ = fake_http({"buildapcsales/new.json": (200, fixture_text("reddit_buildapcsales.json"))})
     offers = RedditSource("r", subreddits=["buildapcsales"], http=http).fetch()
     assert len(offers) == 3                       # sticky dropped, expired kept (for crowd learning)
+    assert {o.trust for o in offers} == {"community"}
     gpu, monitor, ssd = offers
     assert (gpu.price, gpu.reference_price, gpu.retailer, gpu.category) == (429, 599, "Newegg", "gpu")
     assert gpu.community_score == 140

@@ -18,6 +18,7 @@ from .rss import RssSource
 class RedditSource(Source):
     type = "reddit"
     default_interval = 120
+    trust = "community"     # leads only: confirmed on the store's own page before use
 
     def __init__(self, name: str, subreddits: list[str], sort: str = "new", limit: int = 50, **kw):
         super().__init__(name, **kw)
@@ -53,6 +54,7 @@ class RedditSource(Source):
             community_score=int(d.get("ups") or d.get("score") or 0) or None,
             posted_at=float(d["created_utc"]) if d.get("created_utc") else None,
             tags=[t for t in (flair, f"r/{sub}") if t],
+            trust=self.trust,
         )
 
     def fetch(self) -> list[Offer]:

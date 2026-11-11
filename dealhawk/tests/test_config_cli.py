@@ -18,7 +18,8 @@ def test_example_config_loads(tmp_path, monkeypatch):
         monkeypatch.delenv(k, raising=False)
     cfg = load_config(EXAMPLE)
     names = [s.name for s in cfg.sources]
-    assert "slickdeals_frontpage" in names and "walmart" in names and "target" not in names   # disabled skipped
+    assert names == ["walmart", "bestbuy-pages", "newegg"]          # verified first-party sources only
+    assert all(s.trust == "first-party" for s in cfg.sources)
     assert [w.name for w in cfg.watches] == ["MacBooks", "GPUs & monitors", "Anything insane"]
     assert cfg.alerts.quiet_hours.timezone == "America/New_York"
     assert cfg.verify.tiers == ["steal"] and cfg.learning.enabled and not cfg.llm.enabled
@@ -89,7 +90,7 @@ def test_cli_end_to_end(tmp_path, monkeypatch, capsys):
     yaml.safe_dump(raw, open("dealhawk.yaml", "w"))
     cli.main(["sources"])
     out = capsys.readouterr().out
-    assert "retailer" in out and "slickdeals_frontpage" in out and "<RssSource feed" in out
+    assert "retailer" in out and "slickdeals" not in out and "<RssSource feed" in out
     cli.main(["once"])                                                       # network blocked → reported
     assert "✗ feed" in capsys.readouterr().out
     cli.main(["score", "20", "--history", "100,100,95,100,60,100,98,62,100"])

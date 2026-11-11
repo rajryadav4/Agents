@@ -13,8 +13,9 @@ judged against that product's own price history, not the inflated "list price".
 
 ## What's in the MVP
 - Steal Score from per-product price history (novelty vs usual sale low, robust σ-drop, depth).
-- Sources: Slickdeals/Reddit feeds (every retailer), direct Walmart/Target/Amazon/+15 retailer page
-  harvesting, Keepa (Amazon), Best Buy API, Shopify stores, watched URLs.
+- Verified sources only: direct Walmart/Target/Amazon/+15 retailer page harvesting, Keepa (Amazon),
+  Best Buy API, Shopify stores, watched/tracked product links. Community posts are opt-in leads,
+  shown only after their price is confirmed on the retailer's own page.
 - Claude as judge for cold-start items and fake-deal detection; an online model that learns from
   👍/👎, clicks and crowd reactions; exploration alerts to learn faster.
 - Live re-verification of suspected price glitches before alerting.

@@ -113,6 +113,7 @@ class Source:
 
     type: str = "base"
     default_interval: int = 300
+    trust: str = "first-party"     # see Offer.trust
 
     def __init__(self, name: str, http: Http | None = None, interval: int | None = None):
         self.name = name

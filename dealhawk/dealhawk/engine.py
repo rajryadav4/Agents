@@ -89,12 +89,27 @@ class Engine:
                 log.error("notifier %s failed: %s", n.type, e)
         return ok
 
+    def _confirm_community(self, deal: Deal, now: float) -> str | None:
+        """A community post is only a lead: confirm its price on the store's own page, or drop it."""
+        o = deal.offer
+        v = deal.verification = self.verifier.verify(o)
+        if not v.live:
+            what = {"corrected": f"the store's page shows ${v.live_price:,.2f}" if v.live_price else "price differs",
+                    "unverifiable": v.detail or "couldn't read the store's page"}.get(v.status, v.status)
+            return f"unconfirmed community post — {what}"
+        if v.live_price is not None and v.live_price < (o.price or 0):
+            o.price = v.live_price
+        self.store.record(o, now)                     # only now does this price enter the history
+        when = datetime.fromtimestamp(v.checked_at).strftime("%H:%M:%S")
+        deal.score.reasons.insert(0, f"✅ confirmed on {o.retailer}'s own page at {when}")
+        return None
+
     def _verify(self, deal: Deal) -> str | None:
         """Re-check the live price of suspected glitches. Returns a suppress reason if it's gone."""
         o, s = deal.offer, deal.score
         if not self.verifier.wants(s.tier, s.glitch_suspect):
             return None
-        v = deal.verification = self.verifier.verify(o)
+        v = deal.verification = deal.verification or self.verifier.verify(o)
         when = datetime.fromtimestamp(v.checked_at).strftime("%H:%M:%S")
         if v.live:
             if v.status == "lower":
@@ -112,6 +127,11 @@ class Engine:
 
     def _deliver(self, deal: Deal, now: float, report: CycleReport) -> None:
         reason = self._suppress_reason(deal, now)
+        if reason is None and deal.offer.trust == "community":
+            reason = self._confirm_community(deal, now)
+            if reason is not None:            # never shown, logged or alerted
+                report.suppressed.append((deal, reason))
+                return
         if reason is None:
             reason = self._verify(deal)
             if reason is None:
@@ -181,7 +201,8 @@ class Engine:
             history = self.store.history(o.key)       # prior prices, *before* recording this one
             priors[o.key] = history
             score = score_offer(o, history, self.cfg.scoring, now)
-            self.store.record(o, now)
+            if o.trust != "community":       # a post's claimed price isn't evidence until confirmed
+                self.store.record(o, now)
             candidates.append((o, score))
 
         # 2. ask Claude about offers that pass your filters (ignoring score) — batched, cached, capped

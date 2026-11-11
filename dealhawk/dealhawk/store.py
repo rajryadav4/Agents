@@ -65,6 +65,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS feedback_once ON feedback(key, origin, deal_id
 
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 
+-- products you asked DealHawk to watch by link
+CREATE TABLE IF NOT EXISTS tracked (
+    id INTEGER PRIMARY KEY,
+    url TEXT NOT NULL,
+    title TEXT,
+    retailer TEXT,
+    mode TEXT NOT NULL,              -- target | smart
+    target_price REAL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_ts REAL NOT NULL,
+    last_price REAL,
+    low_price REAL,
+    last_checked REAL,
+    status TEXT,                     -- pending | ok | error
+    error TEXT,
+    hits INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS llm_cache (
     key TEXT NOT NULL,
     price REAL,
@@ -237,6 +255,46 @@ class Store:
         with self._lock:
             return self._db.execute("SELECT COUNT(*) FROM deals WHERE explore=1 AND notified=1 AND ts>=?",
                                     (ts,)).fetchone()[0]
+
+    # ---- tracked products ----------------------------------------------------
+    TRACK_FIELDS = {"url", "title", "retailer", "mode", "target_price", "active", "last_price", "low_price",
+                    "last_checked", "status", "error", "hits"}
+
+    def add_tracked(self, url: str, mode: str, target_price: float | None = None, title: str | None = None,
+                    retailer: str | None = None, ts: float | None = None) -> int:
+        with self._lock:
+            cur = self._db.execute(
+                "INSERT INTO tracked(url, title, retailer, mode, target_price, created_ts, status)"
+                " VALUES (?,?,?,?,?,?, 'pending')", (url, title, retailer, mode, target_price, ts or time.time()))
+            self._db.commit()
+            return cur.lastrowid
+
+    def get_tracked(self, tid: int) -> dict | None:
+        with self._lock:
+            r = self._db.execute("SELECT * FROM tracked WHERE id=?", (tid,)).fetchone()
+        return dict(r) if r else None
+
+    def list_tracked(self, active_only: bool = False) -> list[dict]:
+        q = "SELECT * FROM tracked" + (" WHERE active=1" if active_only else "") + " ORDER BY id DESC"
+        with self._lock:
+            return [dict(r) for r in self._db.execute(q)]
+
+    def update_tracked(self, tid: int, **fields) -> None:
+        bad = set(fields) - self.TRACK_FIELDS
+        if bad:
+            raise ValueError(f"unknown tracked fields {sorted(bad)}")
+        if not fields:
+            return
+        cols = ", ".join(f"{k}=?" for k in fields)
+        with self._lock:
+            self._db.execute(f"UPDATE tracked SET {cols} WHERE id=?", (*fields.values(), tid))
+            self._db.commit()
+
+    def delete_tracked(self, tid: int) -> bool:
+        with self._lock:
+            n = self._db.execute("DELETE FROM tracked WHERE id=?", (tid,)).rowcount
+            self._db.commit()
+        return n > 0
 
     def kv_get(self, k: str) -> str | None:
         with self._lock:

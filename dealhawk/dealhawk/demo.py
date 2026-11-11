@@ -49,6 +49,22 @@ def seed(store: Store, order: tuple = (3, 2, 5, 8, 6, 1, 0)) -> None:
         _add(store, i, now - (len(order) - n) * 420, *SAMPLES[i])
 
 
+def seed_tracked(store: Store) -> None:
+    """Two sample tracked products (no real links) so the tracking panel can be previewed."""
+    from .models import slug
+    now = time.time()
+    for title, retailer, mode, target, prices in [
+        ("Sample: 65\" OLED TV you're watching", "Best Buy", "target", 1299.0, [1799, 1799, 1699, 1799, 1499, 1599, 1449]),
+        ("Sample: laptop on AI watch", "Amazon", "smart", None, [1999, 1999, 1899, 1949, 1999, 1849, 1899]),
+    ]:
+        tid = store.add_tracked("https://example.com/sample", mode, target, title=title, retailer=retailer,
+                                ts=now - 20 * 86400)
+        for j, pr in enumerate(prices):
+            store.record(Offer("demo", retailer, title, "", pr, product_id=f"track-{tid}"),
+                         ts=now - (len(prices) - j) * 3 * 86400)
+        store.update_tracked(tid, last_price=prices[-1], low_price=min(prices), status="ok", last_checked=now - 300)
+
+
 def trickle(store: Store, every: float = 12.0) -> None:
     """Add another sample deal now and then, so the live updates can be seen."""
     i = 1000

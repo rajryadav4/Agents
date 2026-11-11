@@ -1,6 +1,6 @@
 """The live dashboard: a web page that shows deals the moment DealHawk finds them.
 
-    dealhawk run            → hunts deals AND serves http://localhost:8787
+    dealhawk run            → hunts deals AND serves http://localhost:8686
     dealhawk serve          → dashboard only, over an existing dealhawk.db
     dealhawk serve --demo   → clearly-labelled SAMPLE data, to preview the page
 
@@ -12,6 +12,11 @@ Routes
     GET  /api/history/<deal_id>     price history of that product (for the chart)
     GET  /api/stream?after_id=N     Server-Sent Events: pushes each new deal instantly
     POST /api/deals/<id>/label      {"label": "good" | "bad"} — trains the model
+    GET  /api/tracked               products you track by link (+ their price history)
+    POST /api/tracked               {"url", "mode": "target"|"smart", "target_price"}
+    POST /api/tracked/<id>          change mode / target / active
+    POST /api/tracked/<id>/check    check the price right now
+    DELETE /api/tracked/<id>        stop tracking
     /fb/… /go/… /wa/…               phone feedback routes (feedback.py; token-protected)
 
 Hosting it: set `web.host: 0.0.0.0` and a `web.password` (HTTP Basic auth; any
@@ -44,7 +49,7 @@ INDEX = Path(__file__).with_name("web") / "index.html"
 class WebConfig:
     enabled: bool = True
     host: str = "127.0.0.1"        # 0.0.0.0 to reach it from other devices / when hosting
-    port: int = 8787
+    port: int = 8686
     password: str = ""             # required when host isn't localhost
 
 
@@ -56,7 +61,7 @@ def _int(q: dict, k: str, default: int | None) -> int | None:
 
 
 def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, demo: bool = False,
-                sources: list | None = None) -> ThreadingHTTPServer:
+                sources: list | None = None, tracker=None) -> ThreadingHTTPServer:
     index_html = INDEX.read_text(encoding="utf-8")
     stopping = threading.Event()
     source_names = [s.name for s in (sources or [])]
@@ -129,6 +134,8 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
                 return self.json({"key": deal["key"], "points": store.price_points(deal["key"])})
             if self.command == "GET" and path == "/api/stream":
                 return self._stream(_int(q, "after_id", None))
+            if path == "/api/tracked" or path.startswith("/api/tracked/"):
+                return self._tracked(path)
             m = re.fullmatch(r"/api/deals/(\d+)/label", path)
             if self.command == "POST" and m:
                 try:
@@ -143,6 +150,59 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
 
         do_GET = _route
         do_POST = _route
+        do_DELETE = _route
+
+        def _tracked(self, path: str):
+            from .models import slug
+            from .tracking import TrackError
+            if tracker is None:
+                return self.json({"error": "tracking is turned off"}, 503)
+            m = re.fullmatch(r"/api/tracked(?:/(\d+))?(/check)?", path)
+            if not m:
+                return self.reply(404, "not found")
+            tid = int(m.group(1)) if m.group(1) else None
+            if tid is None and self.command == "GET":
+                items = store.list_tracked()
+                for t in items:
+                    t["points"] = store.price_points(f"{slug(t['retailer'] or 'Unknown')}:track-{t['id']}", 120)
+                return self.json(items)
+            if tid is None and self.command == "POST":
+                try:
+                    data = json.loads(self.body() or b"{}")
+                    target = data.get("target_price")
+                    t = tracker.add(data.get("url", ""), data.get("mode", "smart"),
+                                    float(target) if target not in (None, "") else None)
+                except (TrackError, ValueError, TypeError) as e:
+                    return self.json({"error": str(e)}, 400)
+                return self.json(t, 201)
+            if tid is None or not store.get_tracked(tid):
+                return self.json({"error": "unknown item"}, 404)
+            if m.group(2) and self.command == "POST":
+                tracker.check_in_background(tid)
+                return self.json({"ok": True, "checking": tid}, 202)
+            if self.command == "DELETE":
+                return self.json({"ok": store.delete_tracked(tid)})
+            if self.command == "POST":
+                try:
+                    data = json.loads(self.body() or b"{}")
+                    fields = {}
+                    if "mode" in data:
+                        if data["mode"] not in ("target", "smart"):
+                            raise ValueError("mode must be target or smart")
+                        fields["mode"] = data["mode"]
+                    if "target_price" in data:
+                        tp = data["target_price"]
+                        fields["target_price"] = float(tp) if tp not in (None, "") else None
+                    if "active" in data:
+                        fields["active"] = 1 if data["active"] else 0
+                    t = {**store.get_tracked(tid), **fields}
+                    if t["mode"] == "target" and not t["target_price"]:
+                        raise ValueError("set the price you want to be alerted at")
+                except (ValueError, TypeError) as e:
+                    return self.json({"error": str(e)}, 400)
+                store.update_tracked(tid, **fields)
+                return self.json(store.get_tracked(tid))
+            return self.reply(405, "method not allowed")
 
         def _stats(self) -> dict:
             day = time.time() - 86400
@@ -193,7 +253,13 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
         def log_message(self, fmt, *args):
             log.debug("%s " + fmt, self.address_string(), *args)
 
-    srv = ThreadingHTTPServer((web.host, web.port), Handler)
+    try:
+        srv = ThreadingHTTPServer((web.host, web.port), Handler)
+    except OSError as e:
+        if e.errno in (48, 98, 10048):   # address in use (macOS, Linux, Windows)
+            raise OSError(e.errno, f"port {web.port} is already in use by another app — set web.port in "
+                                   f"dealhawk.yaml or pass --port") from e
+        raise
     srv.daemon_threads = True
     _orig_shutdown = srv.shutdown
 
@@ -205,8 +271,8 @@ def make_server(web: WebConfig, feedback_cfg: fb.FeedbackConfig, brain, store, d
 
 
 def serve_in_background(web: WebConfig, feedback_cfg, brain, store, demo: bool = False,
-                        sources: list | None = None) -> ThreadingHTTPServer:
-    srv = make_server(web, feedback_cfg, brain, store, demo=demo, sources=sources)
+                        sources: list | None = None, tracker=None) -> ThreadingHTTPServer:
+    srv = make_server(web, feedback_cfg, brain, store, demo=demo, sources=sources, tracker=tracker)
     threading.Thread(target=srv.serve_forever, daemon=True, name="web").start()
     host = "localhost" if web.host in ("127.0.0.1", "0.0.0.0", "::") else web.host
     log.info("dashboard: http://%s:%d", host, srv.server_address[1])

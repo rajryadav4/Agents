@@ -85,11 +85,29 @@ def cmd_run(args) -> None:
         sys.exit("no sources configured")
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    engine = Engine(cfg, store)
+    engine, tracker = _runtime(cfg, store)
+    if args.port is not None:
+        cfg.web.port = args.port
     if cfg.web.enabled:
-        srv = serve_in_background(cfg.web, cfg.feedback, engine.brain, store, sources=cfg.sources)
+        try:
+            srv = serve_in_background(cfg.web, cfg.feedback, engine.brain, store, sources=cfg.sources,
+                                      tracker=tracker)
+        except OSError as e:
+            sys.exit(f"dashboard: {e.strerror or e}")
         print(f"🦅 dashboard: {_url(cfg.web, srv)}")
     Scheduler(engine, cfg.sources).run()
+
+
+def _runtime(cfg, store):
+    """Engine + link tracker; tracked links join the polling loop as one more source."""
+    from .tracking import TrackedSource, Tracker
+    engine = Engine(cfg, store)
+    tracker = None
+    if cfg.tracking.enabled:
+        tracker = Tracker(store, engine, browser_fallback=cfg.tracking.browser_fallback)
+        if not any(s.type == "tracked" for s in cfg.sources):
+            cfg.sources.append(TrackedSource("tracked-links", tracker, interval=cfg.tracking.interval))
+    return engine, tracker
 
 
 def _url(web, srv) -> str:
@@ -104,10 +122,11 @@ def cmd_serve(args) -> None:
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if args.demo:
         from .config import Config
-        from .demo import seed, trickle
+        from .demo import seed, seed_tracked, trickle
         cfg = Config(database=":memory:")
         store = Store(":memory:")
         seed(store)
+        seed_tracked(store)
     else:
         cfg, store = _load(args)
     if args.host:
@@ -116,9 +135,13 @@ def cmd_serve(args) -> None:
         sys.exit("serving on a non-local address needs web.password in the config")
     if args.port is not None:
         cfg.web.port = args.port
-    brain = Brain(store, cfg.scoring, cfg.learning, cfg.llm, judge=False)
+    engine, tracker = _runtime(cfg, store)
     from .web import make_server
-    srv = make_server(cfg.web, cfg.feedback, brain, store, demo=args.demo, sources=cfg.sources)
+    try:
+        srv = make_server(cfg.web, cfg.feedback, engine.brain, store, demo=args.demo, sources=cfg.sources,
+                          tracker=tracker)
+    except OSError as e:
+        sys.exit(f"dashboard: {e.strerror or e}")
     print(f"🦅 dashboard: {_url(cfg.web, srv)}" + ("   (DEMO — sample data, not real deals)" if args.demo else ""))
     if args.demo:
         threading.Thread(target=trickle, args=(store,), daemon=True).start()
@@ -128,6 +151,47 @@ def cmd_serve(args) -> None:
         pass
     finally:
         srv.shutdown()
+
+
+def cmd_track(args) -> None:
+    from .tracking import TrackError
+    cfg, store = _load(args)
+    engine, tracker = _runtime(cfg, store)
+    if tracker is None:
+        sys.exit("tracking is turned off in the config")
+    if args.action == "add":
+        if not args.url:
+            sys.exit("usage: dealhawk track add <url> [--target PRICE]")
+        try:
+            t = tracker.add(args.url, "target" if args.target else "smart", args.target, check=False)
+        except TrackError as e:
+            sys.exit(str(e))
+        how = f"alert at ≤ ${args.target:,.2f}" if args.target else "AI watch: lowest price / steal"
+        print(f"tracking #{t['id']} ({how}) — checking now…")
+        tracker.check(t["id"])
+        t = store.get_tracked(t["id"])
+        if t["status"] == "ok":
+            print(f"  {t['title']}: ${t['last_price']:,.2f} at {t['retailer']}")
+        else:
+            print(f"  couldn't read the price yet: {t['error']}")
+    elif args.action == "list":
+        items = store.list_tracked()
+        if not items:
+            print("nothing tracked yet — dealhawk track add <url> [--target PRICE]")
+        for t in items:
+            price = f"${t['last_price']:,.2f}" if t["last_price"] else "—"
+            low = f"low ${t['low_price']:,.2f}" if t["low_price"] else ""
+            goal = f"target ${t['target_price']:,.2f}" if t["mode"] == "target" else "AI watch"
+            state = "paused" if not t["active"] else ("⚠ " + (t["error"] or "")[:50] if t["status"] == "error" else "")
+            print(f"#{t['id']:<4} {price:>10}  {low:<14} {goal:<18} {(t['title'] or t['url'])[:50]}  {state}")
+    elif args.action == "rm":
+        if not args.url or not args.url.isdigit():
+            sys.exit("usage: dealhawk track rm <id>")
+        print("removed" if store.delete_tracked(int(args.url)) else "no such item")
+    elif args.action == "check":
+        for t in store.list_tracked(active_only=True):
+            tracker.check(t["id"])
+        cmd_track(argparse.Namespace(**{**vars(args), "action": "list"}))
 
 
 def cmd_webhooks(args) -> None:
@@ -257,12 +321,13 @@ def main(argv: list[str] | None = None) -> None:
     s = cmd("init", "write a starter dealhawk.yaml")
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_init)
-    s = cmd("run", "run 24/7")
+    s = cmd("run", "run 24/7 (and serve the dashboard)")
+    s.add_argument("--port", type=int, help="dashboard port (default from config: 8686)")
     s.set_defaults(fn=cmd_run)
     s = cmd("serve", "dashboard only (no polling) — over dealhawk.db, or --demo")
     s.add_argument("--demo", action="store_true", help="clearly-labelled sample data to preview the page")
     s.add_argument("--host", help="bind address (default from config: 127.0.0.1)")
-    s.add_argument("--port", type=int, help="port (default from config: 8787)")
+    s.add_argument("--port", type=int, help="port (default from config: 8686)")
     s.set_defaults(fn=cmd_serve)
     s = cmd("once", "poll every source once")
     s.add_argument("--source", action="append", help="only this source (repeatable)")
@@ -290,6 +355,11 @@ def main(argv: list[str] | None = None) -> None:
     s = cmd("review", "rate recent deals one by one to train the model")
     s.add_argument("--limit", type=int, default=20)
     s.set_defaults(fn=cmd_review)
+    s = cmd("track", "track a product link: add <url> [--target PRICE] | list | check | rm <id>")
+    s.add_argument("action", choices=["add", "list", "check", "rm"])
+    s.add_argument("url", nargs="?", help="product link (add) or id (rm)")
+    s.add_argument("--target", type=float, help="alert when the price is at or below this; omit for AI watch")
+    s.set_defaults(fn=cmd_track)
     s = cmd("webhooks", "print the WhatsApp webhook URLs for Twilio / Meta")
     s.set_defaults(fn=cmd_webhooks)
     s = cmd("brain", "show what the model has learned")

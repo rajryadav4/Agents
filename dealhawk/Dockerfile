@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir ".[claude]"
 #   RUN pip install playwright && playwright install --with-deps chromium
 VOLUME /data
 WORKDIR /data
-EXPOSE 8787
+EXPOSE 8686
 ENV DEALHAWK_DB=/data/dealhawk.db
 ENTRYPOINT ["dealhawk"]
 CMD ["run", "-c", "/data/dealhawk.yaml"]

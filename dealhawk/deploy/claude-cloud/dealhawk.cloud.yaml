@@ -73,13 +73,21 @@ llm:
     Happy with open-box. Don't care about clothes or kitchen gadgets.
 
 # ── Live dashboard ──────────────────────────────────────────────────────
-# `dealhawk run` serves it at http://localhost:8787 — deals appear the moment they're found.
+# `dealhawk run` serves it at http://localhost:8686 — deals appear the moment they're found.
 # To open it from your phone / host it: host 0.0.0.0 + a password (HTTP Basic auth).
 web:
   enabled: true
   host: ${DEALHAWK_WEB_HOST:-127.0.0.1}
-  port: ${DEALHAWK_WEB_PORT:-8787}
+  port: ${DEALHAWK_WEB_PORT:-8686}
   password: ${DEALHAWK_WEB_PASSWORD:-}
+
+# ── Products you track by link (add them on the dashboard or `dealhawk track add <url>`) ──
+# 🎯 target price: alert when it's at or below your price.
+# 🤖 AI watch: alert at its lowest price since you started tracking, or when it's a steal/great deal.
+tracking:
+  enabled: true
+  interval: 600              # seconds between price checks of every tracked link
+  browser_fallback: true     # use headless Chromium for JS-heavy pages (if Playwright is installed)
 
 # ── Phone feedback links (👍/👎 in alerts, WhatsApp replies) ─────────────
 # Served by the dashboard server above. `dealhawk webhooks` prints the URLs for Twilio / Meta.

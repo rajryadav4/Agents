@@ -66,13 +66,32 @@ It starts out agreeing with the formula and gains influence as labels add up (up
 
 > 🛡️ **Big-box sites fight bots.** Walmart, Target and Amazon use Akamai, PerimeterX and captchas, and their terms restrict automated access. DealHawk keeps per-site gaps between requests, backs off when blocked, and treats a captcha page as a failure. Keep intervals modest and the page list short, and rely on the community feeds, Keepa and official APIs for speed. The preset URLs are best-effort: check each one with `dealhawk once --source <name> -v`.
 
+## Track any product by its link
+
+Paste a product link in the dashboard's **📌 Track a product** bar (or run `dealhawk track add <url>`) and choose a mode:
+
+| mode | alerts you when |
+|---|---|
+| **🎯 My price** | the price is at or below the price you set (and again if it drops ≥5% further) |
+| **🤖 AI watch** | it hits its **lowest price since you started tracking** (after a few checks, so the first readings don't count), or the Steal Score / Claude rate it a **great or steal** deal |
+
+In both modes a suspected price glitch is re-verified live and sent at once. Each tracked item shows its current price, lowest price, a price chart, when it was last checked, and any problem reading it (for example "the store blocked the request (bot protection)"). It also has Check now / change price / pause / remove buttons.
+
+Prices are read from the store's structured data (JSON-LD, Next.js state, Shopify JSON, Amazon's HTML), with a headless browser as a fallback for JS-heavy pages (`pip install playwright && playwright install chromium`). Only public `http(s)` links are accepted.
+
+```
+dealhawk track add https://www.bestbuy.com/site/…/6565837.p --target 799   # 🎯 alert at $799
+dealhawk track add https://www.walmart.com/ip/…/5129348702                 # 🤖 AI watch
+dealhawk track list | check | rm 3
+```
+
 ## Live dashboard
 
 ![DealHawk dashboard (demo data)](docs/dashboard-light.png)
 
 <sub>Screenshot from `dealhawk serve --demo`: sample data, not real deals. Also in [dark](docs/dashboard-dark.png) and on a [phone](docs/dashboard-phone.png).</sub>
 
-`dealhawk run` hunts deals **and** serves a live page at **http://localhost:8787**. New deals appear on it the moment they're found, pushed over Server-Sent Events, with no refresh needed.
+`dealhawk run` hunts deals **and** serves a live page at **http://localhost:8686**. New deals appear on it the moment they're found, pushed over Server-Sent Events, with no refresh needed.
 
 - Filter by Steals / Great / Good / ⚡ Glitches / 🧪 Learning, by store, or by search text. Sort by newest, score or % off.
 - 📈 opens the product's price-history chart. 👍 / 👎 trains the model.

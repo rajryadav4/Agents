@@ -64,6 +64,13 @@ class AlertConfig:
 
 
 @dataclass
+class TrackingConfig:
+    enabled: bool = True
+    interval: int = 600            # seconds between checks of every tracked link
+    browser_fallback: bool = True  # use headless Chromium for JS-heavy pages (if Playwright is installed)
+
+
+@dataclass
 class Config:
     database: str = "dealhawk.db"
     sources: list[Source] = field(default_factory=list)
@@ -76,6 +83,7 @@ class Config:
     feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
     verify: VerifyConfig = field(default_factory=VerifyConfig)
     web: WebConfig = field(default_factory=WebConfig)
+    tracking: TrackingConfig = field(default_factory=TrackingConfig)
 
 
 def _coerce(value: Any, default: Any) -> Any:
@@ -106,7 +114,7 @@ def parse_config(raw: dict, base_dir: Path | None = None, http: Http | None = No
                  env: bool = True) -> Config:
     raw = _expand(raw or {}) if env else (raw or {})
     unknown = set(raw) - {"database", "sources", "notify", "watches", "alerts", "scoring",
-                          "learning", "llm", "feedback", "verify", "web"}
+                          "learning", "llm", "feedback", "verify", "web", "tracking"}
     if unknown:
         raise ConfigError(f"unknown top-level key(s): {sorted(unknown)}")
 
@@ -126,6 +134,7 @@ def parse_config(raw: dict, base_dir: Path | None = None, http: Http | None = No
     cfg.feedback = _build(FeedbackConfig, dict(raw.get("feedback") or {}), "feedback")
     cfg.verify = _build(VerifyConfig, dict(raw.get("verify") or {}), "verify")
     cfg.web = _build(WebConfig, dict(raw.get("web") or {}), "web")
+    cfg.tracking = _build(TrackingConfig, dict(raw.get("tracking") or {}), "tracking")
     if cfg.web.host not in ("127.0.0.1", "localhost", "::1") and not cfg.web.password:
         raise ConfigError(f"web.host is {cfg.web.host!r} (reachable from other machines) — set web.password too")
     if cfg.feedback.public_url and not cfg.feedback.secret:

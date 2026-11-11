@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -54,6 +55,7 @@ class Engine:
         self.feedback: FeedbackConfig = cfg.feedback
         self.clock = clock
         self.verifier = verifier or PriceVerifier(cfg.verify, {src.name: src for src in cfg.sources}, clock=clock)
+        self._lock = threading.Lock()    # the poller and dashboard "check now" may both call process()
 
     def _suppress_reason(self, deal: Deal, now: float) -> str | None:
         a, o, s = self.cfg.alerts, deal.offer, deal.score
@@ -128,11 +130,47 @@ class Engine:
             deal.id = self.store.log_deal(deal, notified=False, ts=now)
         report.suppressed.append((deal, reason))
 
+    def _tracked(self, o: Offer, score: Score, features: dict, prior: list[float], now: float,
+                 report: CycleReport) -> None:
+        """Alert rules for products you track by link."""
+        t = self.store.get_tracked(o.tracked_id)
+        if not t or not t["active"] or o.price is None:
+            return
+        prev_low = min(prior) if prior else None
+        self.store.update_tracked(t["id"], last_price=o.price, last_checked=now, status="ok", error=None,
+                                  low_price=min(o.price, prev_low) if prev_low else o.price)
+        if self.cfg.alerts.require_in_stock and o.in_stock is False:
+            return
+        why = None
+        if t["mode"] == "target" and t["target_price"] and o.price <= t["target_price"]:
+            why = f"🎯 at or below your target ${t['target_price']:,.2f}"
+        elif t["mode"] == "smart":
+            enough = len(prior) >= self.cfg.scoring.min_history_points
+            if score.tier in ("steal", "great"):
+                why = f"🤖 {score.tier} deal for this item"
+            elif enough and prev_low and o.price <= prev_low * 0.97:
+                why = f"🤖 lowest price since you started tracking (was ${prev_low:,.2f})"
+        if score.glitch_suspect:
+            why = why or "⚡ possible price glitch"
+        if why is None:
+            return
+        score.reasons.insert(0, why)
+        report.matched += 1
+        before = len(report.alerted)
+        self._deliver(Deal(o, score, f"Tracking #{t['id']}", features=features), now, report)
+        if len(report.alerted) > before:
+            self.store.update_tracked(t["id"], hits=(t["hits"] or 0) + 1)
+
     def process(self, offers: list[Offer]) -> CycleReport:
+        with self._lock:
+            return self._process(offers)
+
+    def _process(self, offers: list[Offer]) -> CycleReport:
         report = CycleReport(offers=len(offers))
         now = self.clock()
         seen: set[str] = set()
         candidates: list[tuple[Offer, Score]] = []
+        priors: dict[str, list[float]] = {}
         default_min = self.cfg.alerts.min_score
 
         # 1. formula score + record price history for everything we saw
@@ -141,18 +179,23 @@ class Engine:
                 continue
             seen.add(o.key)
             history = self.store.history(o.key)       # prior prices, *before* recording this one
+            priors[o.key] = history
             score = score_offer(o, history, self.cfg.scoring, now)
             self.store.record(o, now)
             candidates.append((o, score))
 
         # 2. ask Claude about offers that pass your filters (ignoring score) — batched, cached, capped
         relevant = [(o, s) for o, s in candidates
-                    if o.in_stock is not False and first_match(self.cfg.watches, o, None, default_min)]
+                    if o.in_stock is not False and (o.tracked_id is not None
+                                                    or first_match(self.cfg.watches, o, None, default_min))]
         verdicts = self.brain.consult_claude(relevant, now)
 
         # 3. final score, learning, matching, delivery
         for o, score in candidates:
             score, features = self.brain.finalize(o, score, verdicts.get(o.key))
+            if o.tracked_id is not None:
+                self._tracked(o, score, features, priors[o.key], now, report)
+                continue
             self.brain.observe_crowd(o, score, features, now)
             if self.cfg.alerts.require_in_stock and o.in_stock is False:
                 continue

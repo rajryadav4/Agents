@@ -86,3 +86,13 @@ def test_live_price_by_id(fake_http):
     o = Offer("wm", "Walmart", "LG", "https://www.walmart.com/ip/LG-65-OLED/5129348702", 296.99,
               product_id="5129348702")
     assert src.live_price(o) == 296.99
+
+
+def test_retail_source_all_pages_unreachable_is_a_failure():
+    def down(url, headers, body):
+        raise FetchError("network unreachable")
+    src = RetailSource("wm", retailer="walmart", pages=["deals", "clearance"], min_gap_s=0,
+                       http=Http(fetcher=down, retries=0, sleep=lambda s: None))
+    with pytest.raises(FetchError, match="every page failed"):
+        src.fetch()
+

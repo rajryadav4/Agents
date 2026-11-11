@@ -162,6 +162,40 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
   padding: 10px 16px; border-radius: 10px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
 .toast.show { opacity: 1; }
 
+/* tracking */
+.trackbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 10px; margin-bottom: 12px; }
+.trackbar .lbl { font-weight: 700; padding: 0 6px; white-space: nowrap; }
+.trackbar input[type=url] { flex: 1 1 280px; min-width: 0; height: 38px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); padding: 0 12px; outline: 0; }
+.trackbar input:focus { border-color: var(--accent); }
+.money { display: flex; align-items: center; height: 38px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 0 10px; }
+.money input { width: 90px; border: 0; outline: 0; background: transparent; }
+.primary { height: 38px; border: 0; border-radius: 10px; padding: 0 16px; font-weight: 700; background: var(--accent); color: #fff; cursor: pointer; }
+:root[data-theme="dark"] .primary { color: #0b1220; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .primary { color: #0b1220; } }
+.primary:disabled { opacity: .6; cursor: default; }
+.formerr { flex-basis: 100%; color: var(--bad); font-size: 13px; padding: 0 6px; }
+.tracked { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.titem { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex;
+  flex-direction: column; gap: 8px; min-width: 0; }
+.titem.hit { border-color: color-mix(in srgb, var(--good) 60%, var(--line)); }
+.titem.off { opacity: .6; }
+.titem .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titem .name a { color: inherit; text-decoration: none; }
+.titem .row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.titem .row b { font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums; }
+.titem svg { width: 100%; height: 34px; display: block; }
+.titem .tools { display: flex; gap: 6px; }
+.titem .tools button { flex: 1 1 auto; height: 32px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; cursor: pointer;
+  color: var(--muted); font-size: 12.5px; padding: 0 8px; white-space: nowrap; }
+.titem .tools button[data-t=rm] { flex: 0 0 34px; padding: 0; }
+.titem .tools button:hover { color: var(--text); border-color: var(--faint); }
+.titem .err { color: var(--warn); font-size: 12.5px; overflow-wrap: anywhere; }
+.sectionhead { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 8px; }
+.sectionhead h2 { font-size: 15px; margin: 0; }
+.sectionhead small { color: var(--muted); }
+
 @media (max-width: 1000px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   aside { position: static; order: 2; }
@@ -200,6 +234,22 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
     <div class="stat"><b id="sGlitch">–</b><small>price glitches (24h)</small></div>
     <div class="stat"><b id="sTracked">–</b><small>products tracked</small></div>
     <div class="stat"><b id="sLabels">–</b><small>things it has learned</small></div>
+  </section>
+
+  <form class="trackbar" id="trackForm" autocomplete="off">
+    <span class="lbl">📌 Track a product</span>
+    <input type="url" id="trackUrl" placeholder="Paste a product link — walmart.com/ip/…, bestbuy.com/site/…, any store" required>
+    <div class="seg" id="modeSeg">
+      <button type="button" data-mode="smart" class="on" title="DealHawk alerts you at its lowest price or when it's a steal">🤖 AI watch</button>
+      <button type="button" data-mode="target" title="Alert me when it's at or below my price">🎯 My price</button>
+    </div>
+    <label class="money" id="targetWrap" hidden>$<input id="trackTarget" type="number" min="0.01" step="0.01" placeholder="alert at"></label>
+    <button class="primary" id="trackBtn" type="submit">Track</button>
+    <div class="formerr" id="trackErr" hidden></div>
+  </form>
+  <section id="trackedWrap" hidden>
+    <div class="sectionhead"><h2>Tracked products</h2><small id="trackedCount"></small></div>
+    <div class="tracked" id="tracked"></div>
   </section>
 
   <section class="controls">
@@ -451,6 +501,99 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { state.unseen = 0; document.title = "DealHawk"; } });
 
+  // ---------- tracking ----------
+  let trackMode = "smart";
+  $("modeSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    trackMode = b.dataset.mode;
+    [...$("modeSeg").children].forEach((x) => x.classList.toggle("on", x === b));
+    $("targetWrap").hidden = trackMode !== "target";
+    if (trackMode === "target") $("trackTarget").focus();
+  });
+  const showErr = (msg) => { $("trackErr").textContent = msg || ""; $("trackErr").hidden = !msg; };
+
+  $("trackForm").addEventListener("submit", async (e) => {
+    e.preventDefault(); showErr("");
+    const body = { url: $("trackUrl").value.trim(), mode: trackMode };
+    if (trackMode === "target") body.target_price = $("trackTarget").value;
+    $("trackBtn").disabled = true;
+    try {
+      const r = await fetch("/api/tracked", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "couldn’t add that link");
+      $("trackUrl").value = ""; $("trackTarget").value = "";
+      toast("📌 Tracking — checking the price now…");
+      loadTracked(); setTimeout(loadTracked, 4000); setTimeout(loadTracked, 12000);
+    } catch (err) { showErr(err.message); }
+    finally { $("trackBtn").disabled = false; }
+  });
+
+  function spark(points) {
+    if (!points || points.length < 2) return "";
+    const W = 260, H = 34, P = 3, xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const sx = (x) => x1 === x0 ? W / 2 : P + (x - x0) / (x1 - x0) * (W - 2 * P);
+    const sy = (y) => y1 === y0 ? H / 2 : H - P - (y - y0) / (y1 - y0) * (H - 2 * P);
+    const d = points.map((p, i) => (i ? "L" : "M") + sx(p[0]).toFixed(1) + " " + sy(p[1]).toFixed(1)).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="price history"><path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+
+  function trackedHTML(t) {
+    const url = state.demo ? "" : safeUrl(t.url);
+    const name = esc(t.title || t.url);
+    const goal = t.mode === "target" ? `🎯 alert at ${money(t.target_price)}` : "🤖 AI watch";
+    let status = "";
+    if (!t.active) status = `<div class="err">Paused</div>`;
+    else if (t.status === "error") status = `<div class="err">⚠️ ${esc(t.error || "couldn’t read the price")}</div>`;
+    else if (t.status === "pending") status = `<div class="row">Checking the price…</div>`;
+    return `
+      <div class="name">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${name}">${name}</a>` : name}</div>
+      <div class="row"><b>${money(t.last_price)}</b>${t.low_price ? `<span>low ${money(t.low_price)}</span>` : ""}<span>· ${esc(t.retailer || "")}</span></div>
+      <div class="row"><span>${goal}</span>${t.hits ? `<span>· ${t.hits} alert${t.hits === 1 ? "" : "s"}</span>` : ""}${t.last_checked ? `<span>· checked ${ago(t.last_checked)}</span>` : ""}</div>
+      ${spark(t.points)}
+      ${status}
+      <div class="tools">
+        <button data-t="check" title="Check the price now">↻ Check</button>
+        <button data-t="edit" title="${t.mode === "target" ? "Change your price" : "Switch to my own target price"}">✎ ${t.mode === "target" ? "Price" : "Set price"}</button>
+        <button data-t="pause">${t.active ? "⏸ Pause" : "▶ Resume"}</button>
+        <button data-t="rm" title="Stop tracking">✕</button>
+      </div>`;
+  }
+
+  async function loadTracked() {
+    try {
+      const items = await api("/api/tracked");
+      $("trackedWrap").hidden = !items.length;
+      $("trackedCount").textContent = items.length ? `${items.length} item${items.length === 1 ? "" : "s"} · checked automatically` : "";
+      const box = $("tracked"); box.textContent = "";
+      for (const t of items) {
+        const el = document.createElement("article");
+        const hit = t.mode === "target" && t.last_price != null && t.target_price && t.last_price <= t.target_price;
+        el.className = `titem ${hit ? "hit" : ""} ${t.active ? "" : "off"}`;
+        el.dataset.id = t.id; el.innerHTML = trackedHTML(t);
+        box.appendChild(el);
+      }
+    } catch (e) { /* tracking may be turned off */ }
+  }
+
+  $("tracked").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-t]"); if (!b) return;
+    const id = b.closest(".titem").dataset.id, act = b.dataset.t;
+    const call = (path, method, body) => fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body) })
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error || "failed"); return j; });
+    try {
+      if (act === "check") { await call(`/api/tracked/${id}/check`, "POST"); toast("Checking…"); setTimeout(loadTracked, 3500); return; }
+      if (act === "rm") { if (!confirm("Stop tracking this product?")) return; await call(`/api/tracked/${id}`, "DELETE"); }
+      if (act === "pause") { const paused = b.textContent.includes("Resume"); await call(`/api/tracked/${id}`, "POST", { active: paused }); }
+      if (act === "edit") {
+        const v = prompt("Alert me when the price is at or below ($). Leave empty to let the AI watch it instead:");
+        if (v === null) return;
+        await call(`/api/tracked/${id}`, "POST", v.trim() ? { mode: "target", target_price: v } : { mode: "smart", target_price: null });
+      }
+      loadTracked();
+    } catch (err) { toast(err.message); }
+  });
+
   // ---------- stats ----------
   async function loadStats() {
     try {
@@ -482,6 +625,7 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
       const d = JSON.parse(e.data);
       if (state.deals.has(d.id)) return;
       add([d], true); announce(d); loadStats();
+      if ((d.watch || "").startsWith("Tracking #")) loadTracked();
       setLive(true, "Live · new deal " + ago(d.ts));
     });
     es.onerror = () => { setLive(false, "Reconnecting…"); };   // EventSource retries by itself
@@ -494,8 +638,9 @@ aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top:
       const deals = await api("/api/deals?limit=300");
       add(deals.reverse());
     } catch (e) { setLive(false, "Can’t reach DealHawk"); }
-    loadStats(); connect();
+    loadStats(); loadTracked(); connect();
     setInterval(loadStats, 20000);
+    setInterval(loadTracked, 30000);
     setInterval(() => { if (!document.querySelector(".chartbox svg")) render(); }, 60000);   // keep “x min ago” fresh
   }
   boot();

@@ -181,11 +181,14 @@ class RetailSource(Source):
 
     def fetch(self) -> list[Offer]:
         offers: list[Offer] = []
-        blocked = 0
+        blocked = failed = 0
+        last_error: FetchError | None = None
         for url in self.urls:
             try:
                 page = self._get(url)
             except FetchError as e:
+                failed += 1
+                last_error = e
                 if e.status in (403, 429, 503):
                     blocked += 1
                 log.warning("%s: %s", self.name, e)
@@ -198,6 +201,9 @@ class RetailSource(Source):
         if blocked and not offers:
             # surface as a failure so the scheduler backs off this source
             raise FetchError(f"{self.name}: blocked on {blocked}/{len(self.urls)} pages", 403)
+        if failed == len(self.urls):
+            raise FetchError(f"{self.name}: every page failed ({last_error})",
+                             last_error.status if last_error else None)
         return offers
 
     def live_price(self, offer: Offer) -> float | None:

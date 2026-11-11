@@ -13,4 +13,4 @@ services:
     volumes:
       - ./data:/data          # config + dealhawk.db (price history + learned model) live here
     ports:
-      - "8787:8787"           # live dashboard + phone feedback routes
+      - "8686:8686"           # live dashboard + phone feedback routes

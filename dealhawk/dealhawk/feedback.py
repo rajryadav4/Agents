@@ -28,7 +28,7 @@ log = logging.getLogger("dealhawk.feedback")
 
 @dataclass
 class FeedbackConfig:
-    public_url: str = ""         # e.g. https://dealhawk.example.com or http://my-box.tailnet.ts.net:8787
+    public_url: str = ""         # e.g. https://dealhawk.example.com or http://my-box.tailnet.ts.net:8686
     secret: str = ""
     whatsapp_number: str = ""    # your number; WhatsApp replies from anyone else are ignored
 

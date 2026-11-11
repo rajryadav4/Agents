@@ -57,6 +57,7 @@ class Offer:
     typical_price: float | None = None     # source-supplied stats (e.g. Keepa 90-day avg)
     low_price: float | None = None         # source-supplied historic low
     tags: list[str] = field(default_factory=list)
+    tracked_id: int | None = None          # set when this is a product you asked DealHawk to track
 
     @property
     def key(self) -> str:

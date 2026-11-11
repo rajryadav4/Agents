@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DealHawk</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦅</text></svg>">
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --line: #e3e6eb;
+  --text: #14171c; --muted: #5d6673; --faint: #8b93a0;
+  --accent: #2357d9; --accent-soft: #e6edfc;
+  --steal: #d92d3a; --steal-soft: #fde8ea;
+  --great: #e06a0b; --great-soft: #fdefe2;
+  --good: #1f8a4c; --good-soft: #e3f4ea;
+  --meh: #6b7280; --meh-soft: #eef0f3;
+  --glitch: #7c3aed; --glitch-soft: #f0e9fe;
+  --live: #16a34a; --warn: #b45309; --bad: #dc2626;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --radius: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --panel: #161a21; --panel-2: #1d222b; --line: #2a303b;
+    --text: #e8ebf0; --muted: #a2abb8; --faint: #6f7886;
+    --accent: #7aa2ff; --accent-soft: #1d2a4a;
+    --steal: #ff5c68; --steal-soft: #3a1a1f; --great: #ff9a3d; --great-soft: #3a2614;
+    --good: #43c47a; --good-soft: #132e1f; --meh: #9aa3af; --meh-soft: #22272f;
+    --glitch: #a78bfa; --glitch-soft: #2a2145;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --panel: #161a21; --panel-2: #1d222b; --line: #2a303b;
+  --text: #e8ebf0; --muted: #a2abb8; --faint: #6f7886;
+  --accent: #7aa2ff; --accent-soft: #1d2a4a;
+  --steal: #ff5c68; --steal-soft: #3a1a1f; --great: #ff9a3d; --great-soft: #3a2614;
+  --good: #43c47a; --good-soft: #132e1f; --meh: #9aa3af; --meh-soft: #22272f;
+  --glitch: #a78bfa; --glitch-soft: #2a2145;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+
+/* header */
+header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.bar { display: flex; align-items: center; gap: 12px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+.brand span { font-size: 22px; }
+.live { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted);
+  padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.live.on .dot { background: var(--live); box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 60%, transparent);
+  animation: pulse 2s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.spacer { flex: 1; }
+.iconbtn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 7px 11px;
+  cursor: pointer; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.iconbtn:hover { color: var(--text); border-color: var(--faint); }
+.iconbtn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+.demo { background: var(--great-soft); color: var(--great); border: 1px solid color-mix(in srgb, var(--great) 40%, transparent);
+  border-radius: 12px; padding: 10px 14px; margin: 14px 0 0; font-weight: 600; font-size: 14px; }
+
+/* stats */
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.stat small { color: var(--muted); font-size: 12.5px; }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.search { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 8px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; height: 38px; }
+.search input { border: 0; outline: 0; background: transparent; width: 100%; }
+.seg { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; overflow-x: auto; }
+.seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.seg button.on { background: var(--panel-2); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+select { height: 38px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 0 10px; max-width: 100%; }
+
+/* layout */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; padding-bottom: 40px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+
+/* card */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+  display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); position: relative; min-width: 0; }
+.card.fresh { animation: arrive 1.8s ease-out; }
+@keyframes arrive { 0% { transform: translateY(-6px); outline: 2px solid var(--accent); } 100% { transform: none; outline: 2px solid transparent; } }
+.card.steal { border-color: color-mix(in srgb, var(--steal) 45%, var(--line)); }
+.card.glitch { border-color: color-mix(in srgb, var(--glitch) 55%, var(--line)); }
+.top { display: flex; gap: 12px; align-items: flex-start; }
+.score { flex: none; width: 50px; height: 50px; border-radius: 12px; display: grid; place-items: center; line-height: 1;
+  font-weight: 800; font-size: 19px; font-variant-numeric: tabular-nums; }
+.score small { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+.t-steal .score { background: var(--steal-soft); color: var(--steal); }
+.t-great .score { background: var(--great-soft); color: var(--great); }
+.t-good .score { background: var(--good-soft); color: var(--good); }
+.t-meh .score { background: var(--meh-soft); color: var(--meh); }
+.title { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.price b { font-size: 24px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.price s { color: var(--faint); font-variant-numeric: tabular-nums; }
+.off { font-weight: 700; font-size: 13px; padding: 2px 8px; border-radius: 999px; background: var(--good-soft); color: var(--good); }
+.flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.flag { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+.flag.glitch { background: var(--glitch-soft); color: var(--glitch); }
+.flag.ok { background: var(--good-soft); color: var(--good); }
+.flag.warn { background: var(--great-soft); color: var(--warn); }
+.flag.low { background: var(--steal-soft); color: var(--steal); }
+.flag.learn { background: var(--accent-soft); color: var(--accent); }
+.why { color: var(--muted); font-size: 13px; margin: 0; padding-left: 16px; }
+.why li { overflow-wrap: anywhere; }
+.actions { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+.open { flex: 1; text-align: center; text-decoration: none; font-weight: 700; background: var(--accent); color: #fff;
+  border-radius: 10px; padding: 9px 12px; }
+:root[data-theme="dark"] .open { color: #0b1220; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .open { color: #0b1220; } }
+.open.disabled, :root .open.disabled { background: var(--panel-2); color: var(--muted) !important; pointer-events: none; font-weight: 600; }
+.vote { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; width: 42px; height: 38px; cursor: pointer; font-size: 16px; }
+.vote.on.good { background: var(--good-soft); border-color: var(--good); }
+.vote.on.bad { background: var(--steal-soft); border-color: var(--steal); }
+.hist { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; height: 38px; padding: 0 10px; cursor: pointer; color: var(--muted); }
+.chart { background: var(--panel-2); border-radius: 10px; padding: 8px; }
+.chart svg { width: 100%; height: 70px; display: block; }
+.chart .lbl { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+
+/* aside */
+aside { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 76px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.panel h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.src { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 4px 9px; align-items: center; padding: 6px 0;
+  border-top: 1px solid var(--line); font-size: 13.5px; }
+.src:first-of-type { border-top: 0; }
+.src .dot.ok { background: var(--live); } .src .dot.fail { background: var(--bad); }
+.src .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src .when { color: var(--faint); font-size: 12px; }
+.src .err { grid-column: 2 / 4; color: var(--bad); font-size: 12px; overflow-wrap: anywhere; }
+.kv { display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; }
+.kv span:first-child { color: var(--muted); }
+.meter { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+
+.empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 20px; background: var(--panel);
+  border: 1px dashed var(--line); border-radius: var(--radius); }
+.empty b { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+.toast.show { opacity: 1; }
+
+@media (max-width: 1000px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  aside { position: static; order: 2; }
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .stats { display: flex; overflow-x: auto; gap: 8px; margin: 12px -16px; padding: 0 16px; scrollbar-width: none; }
+  .stats::-webkit-scrollbar { display: none; }
+  .stat { flex: 0 0 auto; padding: 8px 12px; min-width: 112px; }
+  .stat b { font-size: 18px; }
+  .stat small { font-size: 12px; white-space: nowrap; }
+  .controls select { flex: 1 1 40%; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .bar .live .txt-long { display: none; }
+  .hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <div class="brand"><span>🦅</span>DealHawk</div>
+    <div class="live" id="live"><i class="dot"></i><span id="liveText">Connecting…</span></div>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="notifyBtn" title="Pop up a notification on this computer when a steal arrives">🔔 <span class="hide-sm">Desktop alerts</span></button>
+    <button class="iconbtn" id="themeBtn" title="Toggle light / dark" aria-label="Toggle light / dark">🌗</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="demo" id="demo" hidden>DEMO MODE — these are made-up sample deals to preview the page. They are not real offers and have no links.</div>
+
+  <section class="stats" id="stats">
+    <div class="stat"><b id="sDeals">–</b><small>deals (24h)</small></div>
+    <div class="stat"><b id="sSteals">–</b><small>steals (24h)</small></div>
+    <div class="stat"><b id="sGlitch">–</b><small>price glitches (24h)</small></div>
+    <div class="stat"><b id="sTracked">–</b><small>products tracked</small></div>
+    <div class="stat"><b id="sLabels">–</b><small>things it has learned</small></div>
+  </section>
+
+  <section class="controls">
+    <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Search deals — macbook, oled, airpods…" autocomplete="off"></label>
+    <div class="seg" id="tierSeg" role="tablist">
+      <button data-tier="all" class="on">All</button>
+      <button data-tier="steal">🚨 Steals</button>
+      <button data-tier="great">🔥 Great</button>
+      <button data-tier="good">👍 Good</button>
+      <button data-tier="glitch">⚡ Glitches</button>
+      <button data-tier="learn">🧪 Learning</button>
+    </div>
+    <select id="retailer" aria-label="Retailer"><option value="">All stores</option></select>
+    <select id="sort" aria-label="Sort"><option value="new">Newest first</option><option value="score">Best score</option><option value="off">Biggest % off</option></select>
+  </section>
+
+  <div class="layout">
+    <section class="grid" id="grid"></section>
+    <aside>
+      <div class="panel">
+        <h3>Brain</h3>
+        <div class="kv"><span>Your ratings</span><b id="bYou">0</b></div>
+        <div class="kv"><span>Crowd signals</span><b id="bCrowd">0</b></div>
+        <div class="kv"><span>Claude judge</span><b id="bLlm">off</b></div>
+        <div class="kv"><span>Learned-model influence</span><b id="bInf">0%</b></div>
+        <div class="meter"><i id="bMeter" style="width:0"></i></div>
+      </div>
+      <div class="panel">
+        <h3>Sources</h3>
+        <div id="sources"><div class="meta">No source has reported yet.</div></div>
+      </div>
+    </aside>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const state = { deals: new Map(), maxId: 0, tier: "all", q: "", retailer: "", sort: "new", demo: false, unseen: 0 };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  // ---------- theme ----------
+  const applyTheme = (t) => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; };
+  applyTheme(store.get("dh-theme", ""));
+  $("themeBtn").onclick = () => {
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    applyTheme(next); store.set("dh-theme", next);
+  };
+
+  // ---------- helpers ----------
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const money = (v) => v == null ? "—" : "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const ago = (ts) => {
+    const s = Math.max(0, Date.now() / 1000 - ts);
+    if (s < 45) return "just now";
+    if (s < 3600) return Math.round(s / 60) + "m ago";
+    if (s < 86400) return Math.round(s / 3600) + "h ago";
+    return Math.round(s / 86400) + "d ago";
+  };
+  const toast = (msg) => { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1800); };
+  const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
+  const tierName = { steal: "steal", great: "great", good: "good", meh: "deal" };
+
+  async function api(path, opts) {
+    const r = await fetch(path, opts);
+    if (!r.ok) throw new Error(path + " → " + r.status);
+    return r.json();
+  }
+
+  // ---------- rendering ----------
+  function pctOff(d) {
+    if (d.discount != null && d.discount > 0) return d.discount;
+    if (d.typical && d.price != null && d.typical > d.price) return 1 - d.price / d.typical;
+    return null;
+  }
+
+  function cardHTML(d) {
+    const off = pctOff(d);
+    const url = state.demo ? "" : safeUrl(d.url);
+    const flags = [];
+    if (d.glitch) flags.push(`<span class="flag glitch">⚡ Possible price glitch</span>`);
+    if (d.verified === "confirmed" || d.verified === "lower") flags.push(`<span class="flag ok">✅ Verified live</span>`);
+    else if (d.verified === "unverifiable") flags.push(`<span class="flag warn">⚠️ Not verified</span>`);
+    if (d.record_low) flags.push(`<span class="flag low">Record low</span>`);
+    if (d.explore) flags.push(`<span class="flag learn">🧪 Is this good for you?</span>`);
+    if (d.basis === "history") flags.push(`<span class="flag">From price history</span>`);
+    else if (d.basis === "reference") flags.push(`<span class="flag">vs. claimed “was” price</span>`);
+    const reasons = (d.reasons || []).slice(0, 3).map((r) => `<li>${esc(r)}</li>`).join("");
+    const lab = d.label === 1 ? "good" : d.label === 0 ? "bad" : "";
+    return `
+      <div class="top">
+        <div class="score" title="Steal Score">${d.score}<small>${tierName[d.tier] || d.tier}</small></div>
+        <div style="min-width:0">
+          <div class="title">${esc(d.title)}</div>
+          <div class="meta">${esc(d.retailer)} · ${ago(d.ts)}${d.watch ? " · " + esc(d.watch) : ""}</div>
+        </div>
+      </div>
+      <div class="price"><b>${money(d.price)}</b>${d.typical && d.typical > (d.price || 0) ? `<s>${money(d.typical)}</s>` : ""}${off ? `<span class="off">−${Math.round(off * 100)}%</span>` : ""}</div>
+      ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}
+      ${reasons ? `<ul class="why">${reasons}</ul>` : ""}
+      <div class="chartbox"></div>
+      <div class="actions">
+        <a class="open ${url ? "" : "disabled"}" ${url ? `href="${esc(url)}" target="_blank" rel="noopener noreferrer"` : ""}>${url ? "Open deal ↗" : (state.demo ? "Sample — no link" : "No link")}</a>
+        <button class="hist" data-act="hist" title="Price history">📈</button>
+        <button class="vote good ${lab === "good" ? "on" : ""}" data-act="good" title="Good deal for me">👍</button>
+        <button class="vote bad ${lab === "bad" ? "on" : ""}" data-act="bad" title="Not for me">👎</button>
+      </div>`;
+  }
+
+  function matches(d) {
+    if (state.tier === "glitch" && !d.glitch) return false;
+    if (state.tier === "learn" && !d.explore) return false;
+    if (["steal", "great", "good"].includes(state.tier) && d.tier !== state.tier) return false;
+    if (state.retailer && d.retailer !== state.retailer) return false;
+    if (state.q) {
+      const hay = (d.title + " " + d.retailer + " " + (d.watch || "")).toLowerCase();
+      if (!state.q.split(/\s+/).every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  }
+
+  function sorted(list) {
+    const by = { new: (a, b) => b.id - a.id, score: (a, b) => b.score - a.score || b.id - a.id,
+                 off: (a, b) => (pctOff(b) || 0) - (pctOff(a) || 0) || b.id - a.id };
+    return list.sort(by[state.sort]);
+  }
+
+  function render(freshIds = new Set()) {
+    const grid = $("grid");
+    const list = sorted([...state.deals.values()].filter(matches));
+    grid.textContent = "";
+    if (!list.length) {
+      const total = state.deals.size;
+      grid.innerHTML = total
+        ? `<div class="empty"><b>Nothing matches these filters</b>${total} deal${total === 1 ? "" : "s"} hidden — try “All”.</div>`
+        : `<div class="empty"><b>No deals yet</b>DealHawk is watching. Steals show up here the second they’re found — no refresh needed.</div>`;
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const d of list.slice(0, 400)) {
+      const el = document.createElement("article");
+      el.className = `card t-${d.tier} ${d.tier === "steal" ? "steal" : ""} ${d.glitch ? "glitch" : ""} ${freshIds.has(d.id) ? "fresh" : ""}`;
+      el.dataset.id = d.id;
+      el.innerHTML = cardHTML(d);
+      frag.appendChild(el);
+    }
+    grid.appendChild(frag);
+  }
+
+  function refreshRetailers() {
+    const sel = $("retailer"), cur = sel.value;
+    const names = [...new Set([...state.deals.values()].map((d) => d.retailer))].sort();
+    sel.innerHTML = `<option value="">All stores</option>` + names.map((n) => `<option ${n === cur ? "selected" : ""}>${esc(n)}</option>`).join("");
+  }
+
+  function add(deals, fresh = false) {
+    const ids = new Set();
+    for (const d of deals) {
+      state.deals.set(d.id, d);
+      state.maxId = Math.max(state.maxId, d.id);
+      ids.add(d.id);
+    }
+    refreshRetailers();
+    render(fresh ? ids : new Set());
+    return ids;
+  }
+
+  // ---------- price history chart ----------
+  async function toggleChart(card, id) {
+    const box = card.querySelector(".chartbox");
+    if (box.firstChild) { box.textContent = ""; return; }
+    try {
+      const { points } = await api(`/api/history/${id}`);
+      if (!points.length) { box.innerHTML = `<div class="chart"><div class="lbl"><span>No price history yet</span></div></div>`; return; }
+      const W = 300, H = 70, P = 6;
+      const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const sx = (x) => x1 === x0 ? W / 2 : P + (x - x0) / (x1 - x0) * (W - 2 * P);
+      const sy = (y) => y1 === y0 ? H / 2 : H - P - (y - y0) / (y1 - y0) * (H - 2 * P);
+      const path = points.map((p, i) => (i ? "L" : "M") + sx(p[0]).toFixed(1) + " " + sy(p[1]).toFixed(1)).join(" ");
+      const last = points[points.length - 1];
+      box.innerHTML = `<div class="chart">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Price history">
+          <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+          <circle cx="${sx(last[0])}" cy="${sy(last[1])}" r="3.5" fill="var(--steal)"/>
+        </svg>
+        <div class="lbl"><span>low ${money(y0)}</span><span>${points.length} prices seen</span><span>high ${money(y1)}</span></div></div>`;
+    } catch (e) { toast("Couldn’t load history"); }
+  }
+
+  // ---------- feedback ----------
+  async function vote(card, id, label) {
+    try {
+      await api(`/api/deals/${id}/label`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }) });
+      const d = state.deals.get(id); if (d) d.label = label === "good" ? 1 : 0;
+      card.querySelectorAll(".vote").forEach((b) => b.classList.toggle("on", b.dataset.act === label));
+      toast(label === "good" ? "👍 Learned — more like this" : "👎 Learned — fewer like this");
+      loadStats();
+    } catch (e) { toast("Couldn’t save that"); }
+  }
+
+  $("grid").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]"); if (!btn) return;
+    const card = btn.closest(".card"), id = Number(card.dataset.id);
+    if (btn.dataset.act === "hist") toggleChart(card, id); else vote(card, id, btn.dataset.act);
+  });
+
+  // ---------- controls ----------
+  $("tierSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    state.tier = b.dataset.tier;
+    [...$("tierSeg").children].forEach((x) => x.classList.toggle("on", x === b));
+    render();
+  });
+  $("q").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); render(); });
+  $("retailer").addEventListener("change", (e) => { state.retailer = e.target.value; render(); });
+  $("sort").addEventListener("change", (e) => { state.sort = e.target.value; store.set("dh-sort", state.sort); render(); });
+  state.sort = store.get("dh-sort", "new"); $("sort").value = state.sort;
+
+  // ---------- desktop notifications ----------
+  const canNotify = "Notification" in window;
+  const notifyOn = () => canNotify && Notification.permission === "granted" && store.get("dh-notify", "1") === "1";
+  const paintNotify = () => $("notifyBtn").classList.toggle("active", notifyOn());
+  $("notifyBtn").onclick = async () => {
+    if (!canNotify) return toast("This browser can’t show notifications");
+    if (Notification.permission !== "granted") {
+      const p = await Notification.requestPermission();
+      if (p !== "granted") return toast("Notifications blocked in browser settings");
+      store.set("dh-notify", "1");
+    } else store.set("dh-notify", notifyOn() ? "0" : "1");
+    paintNotify(); toast(notifyOn() ? "🔔 You’ll get a pop-up for steals" : "Desktop alerts off");
+  };
+  paintNotify();
+
+  function announce(d) {
+    if (document.hidden) { state.unseen++; document.title = `(${state.unseen}) DealHawk`; }
+    if (!notifyOn() || !(d.tier === "steal" || d.tier === "great" || d.glitch)) return;
+    const n = new Notification(`${d.glitch ? "⚡ Price glitch" : d.tier === "steal" ? "🚨 Steal" : "🔥 Great deal"}: ${money(d.price)} at ${d.retailer}`,
+      { body: d.title, tag: "deal-" + d.id });
+    const url = state.demo ? "" : safeUrl(d.url);
+    n.onclick = () => { window.focus(); if (url) window.open(url, "_blank", "noopener"); n.close(); };
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { state.unseen = 0; document.title = "DealHawk"; } });
+
+  // ---------- stats ----------
+  async function loadStats() {
+    try {
+      const s = await api("/api/stats");
+      $("sDeals").textContent = s.deals_24h; $("sSteals").textContent = s.steals_24h; $("sGlitch").textContent = s.glitches_24h;
+      $("sTracked").textContent = Number(s.products_tracked).toLocaleString();
+      $("sLabels").textContent = (s.labels_you + s.labels_crowd + s.labels_clicks).toLocaleString();
+      $("bYou").textContent = s.labels_you; $("bCrowd").textContent = s.labels_crowd;
+      $("bLlm").textContent = s.llm ? "on" : "off";
+      $("bInf").textContent = Math.round(s.model_influence * 100) + "%";
+      $("bMeter").style.width = Math.round(s.model_influence / 0.8 * 100) + "%";
+      const src = s.sources || [];
+      $("sources").innerHTML = src.length ? src.map((x) => `
+        <div class="src" title="${esc(x.type)} · every ${Math.round(x.interval / 60)} min">
+          <i class="dot ${x.ok ? "ok" : "fail"}"></i>
+          <span class="name">${esc(x.name)}</span>
+          <span class="when">${x.ok ? (x.offers ?? 0) + " seen · " : ""}${ago(x.last_run)}</span>
+          ${x.ok ? "" : `<span class="err">${esc(x.error || "failed")}</span>`}
+        </div>`).join("") : `<div class="meta">No source has reported yet${state.demo ? " (demo mode doesn’t poll)" : ""}.</div>`;
+    } catch (e) { /* server restarting — the live indicator shows it */ }
+  }
+
+  // ---------- live stream ----------
+  function setLive(on, text) { $("live").classList.toggle("on", on); $("liveText").textContent = text; }
+  function connect() {
+    const es = new EventSource(`/api/stream?after_id=${state.maxId}`);
+    es.onopen = () => setLive(true, "Live");
+    es.addEventListener("deal", (e) => {
+      const d = JSON.parse(e.data);
+      if (state.deals.has(d.id)) return;
+      add([d], true); announce(d); loadStats();
+      setLive(true, "Live · new deal " + ago(d.ts));
+    });
+    es.onerror = () => { setLive(false, "Reconnecting…"); };   // EventSource retries by itself
+  }
+
+  async function boot() {
+    try {
+      const meta = await api("/api/meta");
+      state.demo = !!meta.demo; $("demo").hidden = !state.demo;
+      const deals = await api("/api/deals?limit=300");
+      add(deals.reverse());
+    } catch (e) { setLive(false, "Can’t reach DealHawk"); }
+    loadStats(); connect();
+    setInterval(loadStats, 20000);
+    setInterval(() => { if (!document.querySelector(".chartbox svg")) render(); }, 60000);   // keep “x min ago” fresh
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

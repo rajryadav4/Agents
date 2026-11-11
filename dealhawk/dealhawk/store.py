@@ -80,6 +80,11 @@ class Store:
     # price is only re-sampled this often (seconds).
     RESAMPLE_EVERY = 6 * 3600
 
+    # columns added after the first release; older databases are upgraded on open
+    DEAL_COLUMNS = {"typical": "REAL", "discount": "REAL", "glitch": "INTEGER DEFAULT 0",
+                    "record_low": "INTEGER DEFAULT 0", "verified": "TEXT", "image": "TEXT",
+                    "source": "TEXT", "category": "TEXT"}
+
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
         self._lock = threading.Lock()
@@ -88,6 +93,11 @@ class Store:
         if self.path != ":memory:":
             self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(SCHEMA)
+        have = {r[1] for r in self._db.execute("PRAGMA table_info(deals)")}
+        for col, typ in self.DEAL_COLUMNS.items():
+            if col not in have:
+                self._db.execute(f"ALTER TABLE deals ADD COLUMN {col} {typ}")
+        self._db.commit()
 
     def close(self) -> None:
         self._db.close()
@@ -157,12 +167,16 @@ class Store:
     def log_deal(self, deal: Deal, notified: bool, ts: float | None = None) -> int:
         o, s = deal.offer, deal.score
         with self._lock:
+            v = deal.verification
             cur = self._db.execute(
                 "INSERT INTO deals(key, ts, retailer, title, url, price, score, tier, basis, watch, reasons,"
-                " notified, explore, features) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " notified, explore, features, typical, discount, glitch, record_low, verified, image, source,"
+                " category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (o.key, ts or time.time(), o.retailer, o.title, o.url, o.price, s.value, s.tier,
                  s.basis, deal.watch, json.dumps(s.reasons), int(notified), int(deal.explore),
-                 json.dumps(deal.features) if deal.features else None),
+                 json.dumps(deal.features) if deal.features else None,
+                 s.typical_price or o.reference_price, s.discount, int(s.glitch_suspect), int(s.record_low),
+                 getattr(v, "status", None), o.image, o.source, o.category),
             )
             self._db.commit()
             return cur.lastrowid
@@ -254,19 +268,41 @@ class Store:
         log = [t for t in (json.loads(v) if v else []) if t >= ts - 86400] + [ts]
         self.kv_set("llm_call_log", json.dumps(log))
 
-    def recent_deals(self, limit: int = 25, min_score: int = 0, since: float | None = None) -> list[dict]:
-        q = "SELECT * FROM deals WHERE score>=?"
+    def recent_deals(self, limit: int = 25, min_score: int = 0, since: float | None = None,
+                     after_id: int | None = None) -> list[dict]:
+        """Newest first. `after_id` returns only deals logged after that row (for live updates)."""
+        q = ("SELECT d.*, (SELECT f.label FROM feedback f WHERE f.deal_id=d.id AND f.origin='user'"
+             " ORDER BY f.ts DESC LIMIT 1) AS label FROM deals d WHERE d.score>=?")
         args: list = [min_score]
         if since:
-            q += " AND ts>=?"
+            q += " AND d.ts>=?"
             args.append(since)
-        q += " ORDER BY ts DESC LIMIT ?"
+        if after_id is not None:
+            q += " AND d.id>?"
+            args.append(after_id)
+        q += " ORDER BY d.id DESC LIMIT ?"
         args.append(limit)
         with self._lock:
             rows = [dict(r) for r in self._db.execute(q, args)]
         for r in rows:
             r["reasons"] = json.loads(r["reasons"] or "[]")
+            r.pop("features", None)
         return rows
+
+    def price_points(self, key: str, limit: int = 200) -> list[tuple[float, float]]:
+        """(ts, price) oldest → newest, for the price-history chart."""
+        with self._lock:
+            rows = self._db.execute("SELECT ts, price FROM observations WHERE key=? ORDER BY ts DESC LIMIT ?",
+                                    (key, limit)).fetchall()
+        return [(r[0], r[1]) for r in reversed(rows)]
+
+    def set_source_status(self, name: str, status: dict) -> None:
+        self.kv_set(f"source:{name}", json.dumps(status))
+
+    def source_statuses(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT v FROM kv WHERE k LIKE 'source:%' ORDER BY k").fetchall()
+        return [json.loads(r[0]) for r in rows]
 
     def stats(self) -> dict:
         with self._lock:

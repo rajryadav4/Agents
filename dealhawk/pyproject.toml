@@ -22,7 +22,7 @@ dealhawk = "dealhawk.cli:main"
 include = ["dealhawk*"]
 
 [tool.setuptools.package-data]
-dealhawk = ["config.example.yaml"]
+dealhawk = ["config.example.yaml", "web/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

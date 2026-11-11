@@ -7,7 +7,10 @@ services:
     build: ..
     restart: unless-stopped
     env_file: .env
+    environment:
+      DEALHAWK_WEB_HOST: 0.0.0.0          # reachable from outside the container…
+      # …so DEALHAWK_WEB_PASSWORD must be set in .env (the config refuses to start without it)
     volumes:
       - ./data:/data          # config + dealhawk.db (price history + learned model) live here
     ports:
-      - "8787:8787"           # feedback endpoint (👍/👎 buttons, WhatsApp replies)
+      - "8787:8787"           # live dashboard + phone feedback routes

@@ -47,6 +47,14 @@ class Scheduler:
             delay = min(s.interval * 2 ** self.failures[s.name], MAX_BACKOFF)
         self.next_run[s.name] = self.clock() + delay * random.uniform(0.9, 1.1)
 
+    def _status(self, s: Source, ok: bool, **extra) -> None:
+        try:
+            self.engine.store.set_source_status(s.name, {
+                "name": s.name, "type": s.type, "ok": ok, "last_run": time.time(), "interval": s.interval,
+                "failures": self.failures[s.name], **extra})
+        except Exception as e:  # pragma: no cover - status is best-effort
+            log.debug("could not save status for %s: %s", s.name, e)
+
     def tick(self, pool: ThreadPoolExecutor) -> int:
         """Run every due source once; returns number of alerts sent."""
         due = self.due()
@@ -61,10 +69,12 @@ class Scheduler:
             except Exception as e:
                 self._reschedule(s, ok=False)
                 log.warning("%s failed (%d in a row): %s", s.name, self.failures[s.name], e)
+                self._status(s, ok=False, error=str(e)[:200])
                 continue
             report = self.engine.process(offers)   # processed on this thread: one writer
             alerts += len(report.alerted)
             self._reschedule(s, ok=True)
+            self._status(s, ok=True, offers=report.offers, matched=report.matched, alerted=len(report.alerted))
             log.info("%s: %d offers, %d matched, %d alerted", s.name, report.offers, report.matched,
                      len(report.alerted))
         return alerts

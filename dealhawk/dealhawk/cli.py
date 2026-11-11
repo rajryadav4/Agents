@@ -14,7 +14,8 @@ from . import __version__
 from .brain import Brain
 from .config import ConfigError, load_config
 from .engine import Engine
-from .feedback import apply_label, serve_in_background
+from .feedback import apply_label
+from .web import serve_in_background
 from .models import Deal, Offer
 from .notify import ConsoleNotifier
 from .scheduler import Scheduler
@@ -85,9 +86,48 @@ def cmd_run(args) -> None:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     engine = Engine(cfg, store)
-    if cfg.feedback.active:
-        serve_in_background(cfg.feedback, engine.brain, store)
+    if cfg.web.enabled:
+        srv = serve_in_background(cfg.web, cfg.feedback, engine.brain, store, sources=cfg.sources)
+        print(f"🦅 dashboard: {_url(cfg.web, srv)}")
     Scheduler(engine, cfg.sources).run()
+
+
+def _url(web, srv) -> str:
+    host = "localhost" if web.host in ("127.0.0.1", "0.0.0.0", "::") else web.host
+    return f"http://{host}:{srv.server_address[1]}"
+
+
+def cmd_serve(args) -> None:
+    """Dashboard only (no polling): browse an existing dealhawk.db, or preview with --demo."""
+    import threading
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if args.demo:
+        from .config import Config
+        from .demo import seed, trickle
+        cfg = Config(database=":memory:")
+        store = Store(":memory:")
+        seed(store)
+    else:
+        cfg, store = _load(args)
+    if args.host:
+        cfg.web.host = args.host
+    if cfg.web.host not in ("127.0.0.1", "localhost", "::1") and not cfg.web.password:
+        sys.exit("serving on a non-local address needs web.password in the config")
+    if args.port is not None:
+        cfg.web.port = args.port
+    brain = Brain(store, cfg.scoring, cfg.learning, cfg.llm, judge=False)
+    from .web import make_server
+    srv = make_server(cfg.web, cfg.feedback, brain, store, demo=args.demo, sources=cfg.sources)
+    print(f"🦅 dashboard: {_url(cfg.web, srv)}" + ("   (DEMO — sample data, not real deals)" if args.demo else ""))
+    if args.demo:
+        threading.Thread(target=trickle, args=(store,), daemon=True).start()
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.shutdown()
 
 
 def cmd_webhooks(args) -> None:
@@ -219,6 +259,11 @@ def main(argv: list[str] | None = None) -> None:
     s.set_defaults(fn=cmd_init)
     s = cmd("run", "run 24/7")
     s.set_defaults(fn=cmd_run)
+    s = cmd("serve", "dashboard only (no polling) — over dealhawk.db, or --demo")
+    s.add_argument("--demo", action="store_true", help="clearly-labelled sample data to preview the page")
+    s.add_argument("--host", help="bind address (default from config: 127.0.0.1)")
+    s.add_argument("--port", type=int, help="port (default from config: 8787)")
+    s.set_defaults(fn=cmd_serve)
     s = cmd("once", "poll every source once")
     s.add_argument("--source", action="append", help="only this source (repeatable)")
     s.add_argument("--dry-run", action="store_true", help="print alerts here instead of sending them")

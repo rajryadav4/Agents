@@ -8,5 +8,6 @@ RUN pip install --no-cache-dir ".[claude]"
 VOLUME /data
 WORKDIR /data
 EXPOSE 8787
+ENV DEALHAWK_DB=/data/dealhawk.db
 ENTRYPOINT ["dealhawk"]
 CMD ["run", "-c", "/data/dealhawk.yaml"]

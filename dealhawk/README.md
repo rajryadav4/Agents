@@ -66,6 +66,28 @@ It starts out agreeing with the formula and gains influence as labels add up (up
 
 > 🛡️ **Big-box sites fight bots.** Walmart, Target and Amazon use Akamai, PerimeterX and captchas, and their terms restrict automated access. DealHawk keeps per-site gaps between requests, backs off when blocked, and treats a captcha page as a failure. Keep intervals modest and the page list short, and rely on the community feeds, Keepa and official APIs for speed. The preset URLs are best-effort: check each one with `dealhawk once --source <name> -v`.
 
+## Live dashboard
+
+![DealHawk dashboard (demo data)](docs/dashboard-light.png)
+
+<sub>Screenshot from `dealhawk serve --demo`: sample data, not real deals. Also in [dark](docs/dashboard-dark.png) and on a [phone](docs/dashboard-phone.png).</sub>
+
+`dealhawk run` hunts deals **and** serves a live page at **http://localhost:8787**. New deals appear on it the moment they're found, pushed over Server-Sent Events, with no refresh needed.
+
+- Filter by Steals / Great / Good / ⚡ Glitches / 🧪 Learning, by store, or by search text. Sort by newest, score or % off.
+- 📈 opens the product's price-history chart. 👍 / 👎 trains the model.
+- 🔔 **Desktop alerts** pop up a browser notification for steals while the tab is open, with no WhatsApp setup needed.
+- A sources panel shows each source's health (when it last ran, how many items it saw, blocked or erroring).
+- Works on a phone, in light and dark themes, and fully offline (one self-contained page, no CDNs).
+
+```bash
+dealhawk serve --demo     # preview with clearly-labelled SAMPLE data (no links, DEMO banner)
+dealhawk run              # the real thing: poll sources + dashboard
+dealhawk serve            # dashboard only, over an existing dealhawk.db
+```
+
+**Hosting it** so you can open it from anywhere: set `web.host: 0.0.0.0` and `web.password`. It uses HTTP Basic auth, and DealHawk refuses to bind to a public address without a password. With Docker: `cd deploy && docker compose up -d`, then put HTTPS in front with Caddy or a Cloudflare Tunnel, or keep it private with Tailscale.
+
 ## Quickstart
 
 ```bash
@@ -93,7 +115,8 @@ WhatsApp rule: Twilio and Meta can only send free-form messages within 24 h of y
 ### Everyday commands
 
 ```
-dealhawk deals [--hours 24] [-v]   recent deals (🔔 = alerted, 🧪 = exploration)
+dealhawk serve [--demo]            the live dashboard (also started by `dealhawk run`)
+dealhawk deals [--hours 24] [-v]   recent deals in the terminal (🔔 = alerted, 🧪 = exploration)
 dealhawk review                    rate recent deals y/n — fastest way to teach it
 dealhawk feedback 123 good         rate one deal
 dealhawk brain [--retrain]         what it has learned
@@ -128,6 +151,7 @@ dealhawk/
   verify.py       live re-check of suspected glitches      engine.py   score → match → verify → notify
   matching.py     your watches (keywords, price caps…)     scheduler.py 24/7 loop, per-source backoff
   store.py        SQLite: history, alerts, labels, model   feedback.py 👍/👎 + WhatsApp reply webhooks
+  web.py + web/   live dashboard, JSON API, SSE stream     demo.py     labelled sample data for --demo
   sources/        rss · reddit · retailer (+ harvest) · keepa · bestbuy · shopify · watch
   notify/         whatsapp · ntfy · telegram · discord · pushover · console
 tests/            every source parsed from fixtures; network blocked in tests

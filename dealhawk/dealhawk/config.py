@@ -18,6 +18,7 @@ from .notify import NOTIFIER_TYPES, Notifier
 from .scoring import ScoringConfig
 from .sources import SOURCE_TYPES, Http, Source
 from .verify import VerifyConfig
+from .web import WebConfig
 
 
 class ConfigError(ValueError):
@@ -74,21 +75,38 @@ class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
     verify: VerifyConfig = field(default_factory=VerifyConfig)
+    web: WebConfig = field(default_factory=WebConfig)
+
+
+def _coerce(value: Any, default: Any) -> Any:
+    """Env-substituted values arrive as strings; convert them to the field's type."""
+    if not isinstance(value, str):
+        return value
+    if isinstance(default, bool):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    if isinstance(default, int):
+        return int(value)
+    if isinstance(default, float):
+        return float(value)
+    return value
 
 
 def _build(cls, data: dict, where: str):
-    allowed = {f.name for f in fields(cls)}
-    unknown = set(data) - allowed
+    allowed = {f.name: f for f in fields(cls)}
+    unknown = set(data) - set(allowed)
     if unknown:
         raise ConfigError(f"{where}: unknown key(s) {sorted(unknown)}; allowed: {sorted(allowed)}")
-    return cls(**data)
+    try:
+        return cls(**{k: _coerce(v, allowed[k].default) for k, v in data.items()})
+    except ValueError as e:
+        raise ConfigError(f"{where}: {e}") from e
 
 
 def parse_config(raw: dict, base_dir: Path | None = None, http: Http | None = None,
                  env: bool = True) -> Config:
     raw = _expand(raw or {}) if env else (raw or {})
     unknown = set(raw) - {"database", "sources", "notify", "watches", "alerts", "scoring",
-                          "learning", "llm", "feedback", "verify"}
+                          "learning", "llm", "feedback", "verify", "web"}
     if unknown:
         raise ConfigError(f"unknown top-level key(s): {sorted(unknown)}")
 
@@ -107,6 +125,9 @@ def parse_config(raw: dict, base_dir: Path | None = None, http: Http | None = No
     cfg.llm = _build(LLMConfig, dict(raw.get("llm") or {}), "llm")
     cfg.feedback = _build(FeedbackConfig, dict(raw.get("feedback") or {}), "feedback")
     cfg.verify = _build(VerifyConfig, dict(raw.get("verify") or {}), "verify")
+    cfg.web = _build(WebConfig, dict(raw.get("web") or {}), "web")
+    if cfg.web.host not in ("127.0.0.1", "localhost", "::1") and not cfg.web.password:
+        raise ConfigError(f"web.host is {cfg.web.host!r} (reachable from other machines) — set web.password too")
     if cfg.feedback.public_url and not cfg.feedback.secret:
         raise ConfigError("feedback.public_url is set but feedback.secret is empty — set a long random secret")
 

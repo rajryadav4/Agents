@@ -6,7 +6,8 @@ import urllib.request
 import pytest
 
 from dealhawk.brain import Brain, LearningConfig
-from dealhawk.feedback import FeedbackConfig, links, make_server, parse_reply, token, webhook_token
+from dealhawk.feedback import FeedbackConfig, links, parse_reply, token, webhook_token
+from dealhawk.web import WebConfig, make_server
 from dealhawk.models import Deal, Offer, Score
 from dealhawk.scoring import ScoringConfig
 from dealhawk.store import Store
@@ -19,9 +20,9 @@ def server():
     deal = Deal(Offer("s", "Amazon", "MacBook", "https://amazon.com/dp/X", 999.0), Score(80, "steal", "history"),
                 "w", features={"bias": 1.0, "rule": 0.8, "w=macbook": 1.0})
     deal_id = store.log_deal(deal, notified=True)
-    cfg = FeedbackConfig(public_url="http://127.0.0.1", secret="s3cret", host="127.0.0.1", port=0,
-                         whatsapp_number="+1 617 555 0000")
-    srv = make_server(cfg, brain, store)
+    cfg = FeedbackConfig(public_url="http://127.0.0.1", secret="s3cret", whatsapp_number="+1 617 555 0000")
+    # a dashboard password must not block phone feedback routes (they carry their own tokens)
+    srv = make_server(WebConfig(port=0, password="pw"), cfg, brain, store)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{srv.server_address[1]}"
     yield base, cfg, store, brain, deal_id
@@ -56,7 +57,7 @@ def test_buttons_train_model(server):
 def test_bad_token_and_unknown_routes(server):
     base, cfg, store, _, deal_id = server
     assert call(f"{base}/fb/{deal_id}/good?t=nope", data=b"")[0] == 403
-    assert call(f"{base}/nope")[0] == 404
+    assert call(f"{base}/nope")[0] == 401        # everything else is behind the dashboard password
     assert store.stats()["labels_you"] == 0
 
 

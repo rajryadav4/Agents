@@ -72,13 +72,20 @@ llm:
     Student. Mostly want Apple laptops, GPUs, monitors and headphones.
     Happy with open-box. Don't care about clothes or kitchen gadgets.
 
-# ── Feedback endpoint (for 👍/👎 buttons and WhatsApp replies) ───────────
-# Your phone must reach this: run DealHawk on a VPS, or use Tailscale/Cloudflare Tunnel.
-# `dealhawk webhooks` prints the URLs to paste into Twilio / Meta.
+# ── Live dashboard ──────────────────────────────────────────────────────
+# `dealhawk run` serves it at http://localhost:8787 — deals appear the moment they're found.
+# To open it from your phone / host it: host 0.0.0.0 + a password (HTTP Basic auth).
+web:
+  enabled: true
+  host: ${DEALHAWK_WEB_HOST:-127.0.0.1}
+  port: ${DEALHAWK_WEB_PORT:-8787}
+  password: ${DEALHAWK_WEB_PASSWORD:-}
+
+# ── Phone feedback links (👍/👎 in alerts, WhatsApp replies) ─────────────
+# Served by the dashboard server above. `dealhawk webhooks` prints the URLs for Twilio / Meta.
 feedback:
   public_url: ${DEALHAWK_PUBLIC_URL:-}   # e.g. https://dealhawk.example.com
   secret: ${DEALHAWK_SECRET:-}           # long random string
-  port: 8787
   whatsapp_number: ${WHATSAPP_TO:-}      # only accept replies from you
 
 # ── Glitch verification ─────────────────────────────────────────────────

@@ -1,0 +1,10 @@
+{"products": [
+  {"id": 111, "title": "Wool Runner", "handle": "wool-runner", "product_type": "Shoes", "tags": ["mens", "clearance"],
+   "images": [{"src": "https://cdn.shopify.com/wool.jpg"}],
+   "variants": [
+     {"id": 1001, "title": "8", "price": "98.00", "compare_at_price": null, "available": true},
+     {"id": 1002, "title": "9", "price": "98.00", "compare_at_price": "120.00", "available": false}
+   ]},
+  {"id": 222, "title": "Gift Card", "handle": "gift-card", "product_type": "", "tags": [],
+   "images": [], "variants": [{"id": 2001, "title": "Default Title", "price": "0.00", "available": true}]}
+]}

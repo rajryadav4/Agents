@@ -4,3 +4,4 @@
 |---|---|---|---|
 | 01 | [SENTINEL](01-sentinel.md) | Governed AI incident-response swarm for Kubernetes | Saved for later |
 | 02 | [WARDEN](02-warden.md) | Control plane / firewall for AI agents, sold as SaaS | Proposed flagship |
+| 03 | [DEALHAWK](03-dealhawk.md) | 24/7 agent that finds once-a-year prices & glitches, alerts on WhatsApp | Built (MVP) |

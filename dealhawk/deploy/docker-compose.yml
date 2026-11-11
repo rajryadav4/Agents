@@ -1,0 +1,13 @@
+# 24/7 on any always-on box (Oracle Cloud free VM, a $4 VPS, a Raspberry Pi, a home server).
+#   cp ../dealhawk/config.example.yaml data/dealhawk.yaml   # then edit it
+#   cp .env.example .env                                     # then fill in secrets
+#   docker compose up -d && docker compose logs -f
+services:
+  dealhawk:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data          # config + dealhawk.db (price history + learned model) live here
+    ports:
+      - "8787:8787"           # feedback endpoint (👍/👎 buttons, WhatsApp replies)

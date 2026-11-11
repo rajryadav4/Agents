@@ -1,0 +1,6 @@
+{"from": 1, "to": 2, "total": 2, "products": [
+  {"sku": 6565837, "name": "Apple - MacBook Air 13-inch M3 16GB 256GB - Midnight", "salePrice": 749.0, "regularPrice": 1099.0,
+   "percentSavings": "31.85", "url": "https://www.bestbuy.com/site/6565837.p", "image": "https://pisces.bbystatic.com/6565837.jpg",
+   "onlineAvailability": true, "categoryPath": [{"name": "Best Buy"}, {"name": "Computers & Tablets"}, {"name": "MacBooks"}]},
+  {"sku": 1, "name": "Broken listing", "salePrice": null, "regularPrice": 10}
+]}

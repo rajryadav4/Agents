@@ -1,0 +1,16 @@
+# systemd unit: sudo cp dealhawk.service /etc/systemd/system/ && sudo systemctl enable --now dealhawk
+[Unit]
+Description=DealHawk deal hunter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=dealhawk
+WorkingDirectory=/opt/dealhawk
+EnvironmentFile=/opt/dealhawk/.env
+ExecStart=/opt/dealhawk/.venv/bin/dealhawk run -c /opt/dealhawk/dealhawk.yaml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

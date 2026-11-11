@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dealhawk"
+version = "0.1.0"
+description = "A 24/7 agent that hunts once-in-a-year price drops and price glitches across retailers and pings your phone instantly."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+claude = ["anthropic>=2.0"]
+
+[project.scripts]
+dealhawk = "dealhawk.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dealhawk*"]
+
+[tool.setuptools.package-data]
+dealhawk = ["config.example.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

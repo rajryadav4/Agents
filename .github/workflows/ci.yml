@@ -24,3 +24,26 @@ jobs:
         run: |
           warden demo
           warden redteam
+
+  dealhawk:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: dealhawk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e ".[dev,claude]"
+      - name: Tests (offline)
+        run: pytest -q
+      - name: CLI smoke
+        run: |
+          dealhawk score 20 --history 100,100,95,100,60,100,98,62,100
+          NTFY_TOPIC=x dealhawk sources -c dealhawk/config.example.yaml
+

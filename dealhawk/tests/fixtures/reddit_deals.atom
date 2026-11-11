@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>deals</title>
+  <entry>
+    <title>Dyson V15 Detect $399.99 at Costco (was $749.99)</title>
+    <link href="https://www.reddit.com/r/deals/comments/xyz/dyson_v15/"/>
+    <updated>2026-11-11T14:00:00+00:00</updated>
+    <content type="html">&lt;a href="https://www.costco.com/dyson-v15.product.100.html"&gt;[link]&lt;/a&gt;</content>
+    <category term="deals" label="r/deals"/>
+  </entry>
+</feed>

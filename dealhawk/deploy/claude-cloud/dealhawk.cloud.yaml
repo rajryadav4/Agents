@@ -1,0 +1,197 @@
+# Config used by deploy/claude-cloud/run.sh (scheduled Claude Code cloud runs).
+# Same format as dealhawk.yaml. Secrets are environment variables set in the cloud environment.
+# There is no always-on server here, so 👍/👎 buttons need a separate host; use
+# `dealhawk review` locally against a copy of the state branch's dealhawk.db instead.
+database: ${DEALHAWK_DB:-dealhawk.db}
+
+# ── Where to send alerts ────────────────────────────────────────────────
+# Uncomment the channels you want. Each alert has the product link; with
+# `feedback` set up you can reply "good 123" / "bad 123" to train the model.
+notify:
+  # WhatsApp — pick ONE provider:
+  # (a) CallMeBot: free, personal, 2-minute setup (callmebot.com → WhatsApp). Outbound only.
+  # - type: whatsapp
+  #   provider: callmebot
+  #   to: ${WHATSAPP_TO}                 # your number, e.g. +16175551234
+  #   apikey: ${CALLMEBOT_APIKEY}
+  # (b) Twilio WhatsApp (free sandbox to try). Replies train the model.
+  # - type: whatsapp
+  #   provider: twilio
+  #   to: ${WHATSAPP_TO}
+  #   from_number: ${TWILIO_WHATSAPP_FROM}   # sandbox: +14155238886
+  #   account_sid: ${TWILIO_ACCOUNT_SID}
+  #   auth_token: ${TWILIO_AUTH_TOKEN}
+  # (c) Meta WhatsApp Cloud API (official). Replies train the model.
+  # - type: whatsapp
+  #   provider: cloud
+  #   to: ${WHATSAPP_TO}
+  #   phone_number_id: ${WA_PHONE_NUMBER_ID}
+  #   access_token: ${WA_ACCESS_TOKEN}
+  #   # template: deal_alert            # approved template, for alerts >24h after you last messaged the bot
+
+  # ntfy: free phone push, no account. Install the ntfy app and subscribe to a
+  # LONG RANDOM topic (topics are public — treat the name like a password).
+  # - type: ntfy
+  #   topic: ${NTFY_TOPIC}
+  # - type: telegram
+  #   bot_token: ${TELEGRAM_BOT_TOKEN}
+  #   chat_id: ${TELEGRAM_CHAT_ID}
+  # - type: discord
+  #   webhook_url: ${DISCORD_WEBHOOK_URL}
+  - type: console
+
+# ── When to alert ───────────────────────────────────────────────────────
+alerts:
+  min_score: 70              # 0-100 Steal Score. 80+ = steal, 60+ = great, 40+ = good
+  realert_drop_pct: 5        # same item again only if it drops ≥5% further…
+  realert_after_hours: 24    # …or it went back up and came back down after a day
+  max_per_hour: 30           # beyond this only "steal" tier gets through
+  require_in_stock: true
+  quiet_hours:               # no buzzing at night — except steals / glitches
+    start: "23:30"
+    end: "07:00"
+    timezone: America/New_York
+    except_tier: steal
+
+# ── Learning: it gets smarter from your 👍/👎, your clicks, and the crowd ──
+learning:
+  enabled: true
+  explore_per_day: 6         # extra "🧪 is this good?" alerts just below your bar, so it learns faster
+  warmup_labels: 40          # after ~40 labels the learned model has its full say
+  crowd_labels: true         # posts that get upvoted / sell out fast teach it what a real deal looks like
+
+# ── Claude as a judge (optional; needs ANTHROPIC_API_KEY, pip install 'dealhawk[claude]') ──
+# Knows what products really sell for, so it rates items with no price history yet,
+# and catches "MacBook Pro" listings that are really a $15 case.
+llm:
+  enabled: false
+  model: claude-opus-5-5     # claude-haiku-5-5 is ~40x cheaper per token if cost matters more
+  effort: low
+  max_calls_per_hour: 6      # each call judges up to 10 offers; ~$0.01–0.03 per call on Opus 5.5
+  profile: >
+    Student. Mostly want Apple laptops, GPUs, monitors and headphones.
+    Happy with open-box. Don't care about clothes or kitchen gadgets.
+
+# ── Feedback endpoint (for 👍/👎 buttons and WhatsApp replies) ───────────
+# Your phone must reach this: run DealHawk on a VPS, or use Tailscale/Cloudflare Tunnel.
+# `dealhawk webhooks` prints the URLs to paste into Twilio / Meta.
+feedback:
+  public_url: ${DEALHAWK_PUBLIC_URL:-}   # e.g. https://dealhawk.example.com
+  secret: ${DEALHAWK_SECRET:-}           # long random string
+  port: 8787
+  whatsapp_number: ${WHATSAPP_TO:-}      # only accept replies from you
+
+# ── Glitch verification ─────────────────────────────────────────────────
+# Suspected price glitches are re-checked on the retailer's own page/API before
+# alerting: still live → STEAL sent immediately (even in quiet hours). Already
+# fixed → dropped. Can't check (bot-blocked) → sent anyway, marked unverified.
+# (US retailers can usually cancel pricing-error orders — this just gets you there first.)
+verify:
+  enabled: true
+  tiers: [steal]             # also verify every "steal", not only suspected glitches
+  bypass_quiet_hours: true
+
+# ── What you want (first matching watch wins) ───────────────────────────
+# keywords: any-of phrases (every word of a phrase must appear). "re:<regex>" for regex.
+# exclude:  none-of. min_score overrides alerts.min_score for that watch.
+# min_discount: fraction below the item's typical price (0.4 = 40% under).
+watches:
+  - name: MacBooks
+    keywords: ["macbook air", "macbook pro"]
+    exclude: [case, sleeve, skin, "screen protector", charger, keyboard cover, stand, hub]
+    max_price: 1600
+    min_score: 60
+  - name: GPUs & monitors
+    keywords: ["re:\\b(rtx|rx)\\s?\\d{4}", "oled monitor"]
+    min_score: 65
+  - name: Anything insane          # empty keywords = everything
+    min_score: 85
+
+# ── Where to look ───────────────────────────────────────────────────────
+# Community feeds cover every retailer (Walmart, Target, Costco, Home Depot,
+# Newegg, B&H, Kohl's …) because thousands of hunters post there within minutes.
+sources:
+  - type: rss
+    preset: slickdeals_frontpage
+    interval: 120              # seconds
+  - type: rss
+    preset: slickdeals_popular
+    interval: 180
+  - type: rss
+    name: slickdeals-macbook
+    preset: slickdeals_search
+    query: macbook
+    interval: 300
+  - type: reddit
+    name: reddit-deals
+    subreddits: [buildapcsales, deals, AppleDeals, GameDeals, frugalmalefashion]
+    interval: 120
+
+  # Big retailers' own deal / clearance / search pages, read with a generic product
+  # harvester. See dealhawk/sources/retail.py for presets. These sites fight bots:
+  # keep intervals modest, expect occasional blocks (DealHawk backs off), and
+  # respect their terms. `browser: true` renders JS pages (pip install playwright).
+  - type: retailer
+    name: walmart
+    retailer: walmart
+    pages: [deals, clearance]
+    search: ["macbook"]
+    interval: 600
+  - type: retailer
+    name: target
+    retailer: target
+    enabled: false           # needs browser: true (JS-rendered)
+    pages: [clearance]
+    browser: true
+    interval: 900
+  - type: retailer
+    name: amazon-deals
+    retailer: amazon
+    enabled: false           # heavily protected — Keepa below is far more reliable
+    pages: [deals, warehouse]
+    browser: true
+    interval: 900
+  - type: retailer
+    name: bestbuy-pages
+    retailer: bestbuy
+    pages: [deal-of-the-day, open-box]
+    interval: 600
+  - type: retailer
+    name: more-stores        # any store: retailer "other" + full URLs
+    retailer: other
+    enabled: false
+    display_name: Micro Center
+    urls: ["https://www.microcenter.com/site/content/deals.aspx"]
+    interval: 900
+  # presets also exist for: costco, homedepot, lowes, newegg, bhphoto, microcenter,
+  # samsclub, macys, kohls, dell, apple-refurb, ebay, gamestop, wayfair
+
+  # Amazon price-drop feed via Keepa (paid API). Best Amazon source by far.
+  - type: keepa
+    enabled: false
+    api_key: ${KEEPA_API_KEY:-}
+    min_drop_percent: 40
+    interval: 300
+
+  # Best Buy's official API (free key at developer.bestbuy.com)
+  - type: bestbuy
+    enabled: false
+    api_key: ${BESTBUY_API_KEY:-}
+    searches: ["macbook", "oled tv", ""]   # "" = everything on deep sale
+    min_percent_savings: 30
+    interval: 300
+
+  # Any Shopify store — builds true price history for every product
+  - type: shopify
+    enabled: false
+    stores:
+      - https://www.allbirds.com
+      - {url: https://www.gymshark.com, name: Gymshark}
+    interval: 900
+
+  # Specific product pages you care about (schema.org price markup)
+  - type: watch
+    enabled: false
+    urls:
+      - {url: "https://www.bhphotovideo.com/c/product/1234567-REG/example.html", name: "Example camera"}
+    interval: 900

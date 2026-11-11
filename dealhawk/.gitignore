@@ -1,0 +1,5 @@
+dealhawk.yaml
+*.db
+*.db-wal
+*.db-shm
+.env

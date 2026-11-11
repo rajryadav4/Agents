@@ -184,7 +184,9 @@ class WhatsAppNotifier(Notifier):
         """(url, headers, body) — split out so it can be tested without sending."""
         text = whatsapp_text(deal)
         if self.provider == "callmebot":
-            q = urlencode({"phone": "".join(c for c in self.to if c.isdigit()), "text": text, "apikey": self.apikey})
+            # CallMeBot's documented format keeps the country-code "+": phone=+34111111111
+            q = urlencode({"phone": "+" + "".join(c for c in self.to if c.isdigit()), "text": text,
+                           "apikey": self.apikey})
             return f"https://api.callmebot.com/whatsapp.php?{q}", {}, None
         if self.provider == "twilio":
             auth = base64.b64encode(f"{self.account_sid}:{self.auth_token}".encode()).decode()

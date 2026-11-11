@@ -54,8 +54,10 @@ def test_ntfy_payload_has_feedback_buttons():
 def test_whatsapp_callmebot():
     h, r = http()
     WhatsAppNotifier(provider="callmebot", to="+1 617 555 0000", apikey="K", http=h).send(deal())
-    q = parse_qs(urlparse(r.calls[0][0]).query)
-    assert q["phone"] == ["16175550000"] and q["apikey"] == ["K"]
+    url = r.calls[0][0]
+    assert url.startswith("https://api.callmebot.com/whatsapp.php?phone=%2B16175550000&")   # matches their docs
+    q = parse_qs(urlparse(url).query)
+    assert q["phone"] == ["+16175550000"] and q["apikey"] == ["K"]
     assert "https://h/go/42?t=a" in q["text"][0] and 'Reply "good 42"' in q["text"][0]
 
 
